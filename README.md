@@ -2,7 +2,7 @@
 
 A browser-based, two-player Texas Hold'em game using **virtual chips only**. One player creates a private room and shares its code; the other joins from a second browser. The server owns the deck, rules, timers, and game state. Each browser receives only the information that player is allowed to see.
 
-This README is the **implementation plan**. The repository does not contain runnable game code yet. Setup, demo, and test commands will be added here as those parts are built.
+This README is the project plan and test specification. The first Python game-engine milestone is runnable and tested; the browser, WebSocket server, timers, reconnects, and showdown payout are still to be built.
 
 Team: Srishruthik Alle and Deepthi Morusupalli. Contact: shruthik.alle@gmail.com; Deepthi's contact email will be added after she provides it.
 
@@ -27,12 +27,14 @@ These are deliberate rules for the first version, so the UI, server, and tests c
 | Deal | Each player gets two private cards. Community cards are dealt as flop (3), turn (1), and river (1). |
 | Turn order | The small blind acts first before the flop. The big blind acts first on each later betting round. |
 | Actions | Fold, check, call, bet, and raise. The server decides which are legal from the current state; the browser only displays those choices. |
-| Bet size | A bet or raise adds exactly one bet unit. At most two raises follow the opening bet in each betting round. No custom amounts, all-ins, or side pots. |
+| Bet size | An opening bet is one bet unit. A raise increases the current wager by exactly one bet unit, so the player pays the amount needed to call **plus** one bet unit. The big blind counts as the opening wager before the flop. At most two raises follow an opening wager in each round. No custom amounts, all-ins, or side pots. |
 | Round end | A betting round ends when both players have acted and their contributions to that round are equal. A call after a bet or raise closes the round; a check closes it only after the other player has also checked or matched the blind. |
 | Showdown | If neither player folds, compare the best five-card hands from seven cards. The winner takes the pot; a tie splits it. If the pot is odd, the extra chip goes to the button. |
-| Hand end | A fold, including an automatic fold, gives the pot to the other player. After the result, players may start the next hand. If either player cannot post a full big blind, the match ends. |
+| Hand end | A fold, including an automatic fold, gives the pot to the other player. After the result, players may start the next hand. If either player cannot post a full big blind while retaining at least one chip, the match ends. |
 
-An action that a player cannot afford is unavailable. In particular, if a player cannot afford a call, they must fold; this is a known simplification of poker without all-ins. We will test that it never makes the chip total change unexpectedly.
+An action is unavailable if paying for it would leave the player with zero or fewer chips. In particular, if a player cannot call while keeping at least one chip, they must fold; this is a known simplification of poker without all-ins. We will test that it never makes the chip total change unexpectedly.
+
+Player actions must include a unique action ID. Replaying the same ID must return the original outcome without applying the action twice. An invalid action must leave all authoritative game fields unchanged. A new hand starts only after both players choose **Ready** after the previous result.
 
 ### Timers and reconnects
 
@@ -40,14 +42,15 @@ An action that a player cannot afford is unavailable. In particular, if a player
 - A disconnected player has **20 seconds** to reconnect. The hand pauses during that grace period, including the turn clock. If the player does not return, they forfeit the **match**; the connected player is declared the winner and no further hands are played. If both players disconnect, the room closes without a winner.
 - The server gives each player a private reconnect token when they join. A room code admits the second player but cannot be used to take over an occupied seat. Reconnecting restores the same seat and a fresh view of the current state.
 - All timer and disconnect transitions are server-side and should be tested with a controllable clock, rather than waiting 20 or 30 real seconds in tests.
+- Deadlines are exclusive: an action or reconnection received **before** its deadline counts; at the deadline, the timeout or forfeit takes effect first. A reconnect resumes the remaining turn time rather than granting a new 30 seconds.
 
 ### Privacy rule
 
-Before showdown, **no WebSocket message sent to a player may contain the opponent's hole cards**, including join responses, action results, reconnect snapshots, errors, and timer updates. Spectators are not supported. At showdown the server may reveal both hands. The server creates a separate player-specific view for each message rather than sending one complete game state to both browsers.
+Before showdown, **no WebSocket message sent to a player may contain the opponent's hole cards**, including join responses, action results, reconnect snapshots, errors, and timer updates. Spectators are not supported. At showdown the server may reveal both hands. A hand ending by fold or forfeit does not reveal the cards. The server creates a separate player-specific view for each message rather than sending one complete game state to both browsers.
 
-## Planned components and ownership
+## Agreed components and ownership
 
-This is a proposed split to confirm together. The repository's commit history and this section will be updated to reflect the work each person actually completes.
+Srishruthik and Deepthi agreed to this split. The repository's commit history and this section will be updated to reflect the work each person actually completes.
 
 | Owner | Main responsibility | Evidence to produce |
 | --- | --- | --- |
@@ -57,17 +60,79 @@ This is a proposed split to confirm together. The repository's commit history an
 
 The boundary between the parts is a server-side game API: the real-time layer submits a player identity and requested action; the game engine returns the new state or a rejection. Only the real-time layer converts state into player-specific messages. Neither browser is trusted to calculate the pot, choose the next turn, or decide the winner.
 
-## Checks we intend to keep with the code
+The current engine API is `new_game(bet_unit=10, deck=None)`, `legal_actions(state, player)`, and `apply_action(state, player, action)`. `apply_action` returns an `ActionResult` with `accepted`, `state`, and `error`. On rejection, `state` is the original unchanged object. On success, it is a new immutable state. The WebSocket layer will authenticate players, serialize requests, deduplicate action IDs, and send filtered views; those parts are not implemented yet.
 
-- **Turn order:** a prepared game state says exactly who acts next. An action from the other player is rejected, and the pot, chips, cards, phase, and turn remain unchanged.
-- **Betting:** known action sequences produce independently calculated contributions, pot totals, legal actions, and next actors. The total chips across both stacks and the pot stay constant.
-- **Round progression:** a call or two checks advance exactly one phase; the flop, turn, and river reveal the right number of cards.
-- **Card privacy:** capture every outbound WebSocket message to both players, including a reconnect snapshot, and assert that the opponent's hole cards never appear before showdown.
-- **Reconnect:** disconnect during a player's turn, reconnect before 20 seconds, and confirm the seat, hand, hidden cards, and remaining turn time are restored. Cross 20 seconds without reconnecting and confirm a single match-forfeit result.
-- **Turn timeout:** cross 30 seconds and verify an automatic check when legal or fold otherwise, with no duplicate transition.
-- **Showdown:** use prepared deals with hand rankings worked out independently. This checks our integration and pot award, but most tests target our own game logic rather than Treys itself.
+## Test cases and expected results
 
-Tests will use fixed decks and a controllable clock. We will save the fixtures and expected outcomes in the repository, so staff can run the core workflow locally without credentials or external services. A useful regression test should fail if the relevant rule is deliberately broken.
+These are specifications to turn into automated tests. **G1, G2, G5, G7, R1, and R3 are implemented and passing; the other numbered cases are planned, not passing results.** Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store the actual fixture files and runnable tests with the code. Expected pot and stack values below are calculated from the stated rules, independently of the implementation or Treys.
+
+### Common fixture
+
+Unless a case says otherwise, set bet unit **10**, player **A** as the first button/small blind, and player **B** as big blind. Both start with **200** chips. After blinds: A has **195**, B has **190**, the pot is **15**, round contributions are A **5** and B **10**, and A acts next. Chips in both stacks plus the pot must always total **400**. Card notation is rank plus suit, such as `As` for ace of spades.
+
+### Game rules and chip accounting
+
+| ID | Input or action sequence | Expected result |
+| --- | --- | --- |
+| G1 | Start a hand from the common fixture. | Only A may act. A may fold, call **5**, or raise to a total round contribution of **20** (paying **15**). A cannot check or make a new opening bet while facing the blind. |
+| G2 | A calls **5**; B checks. | After the call: pot **20**, A **190**, B **190**, B's turn. After B checks: flop begins, contributions reset to **0/0**, three community cards appear, pot stays **20**, and B acts first. |
+| G3 | From G2, B bets **10**; A calls **10**. | After B bets: pot **30**, A **190**, B **180**, A's turn. After A calls: pot **40**, A **180**, B **180**; turn begins, contributions reset, one more community card appears, and B acts first. |
+| G4 | From G3, B checks; A checks; B checks; A checks. | The first pair of checks advances from turn to river, revealing one card. The second pair advances to showdown. Pot remains **40** throughout; no extra cards are dealt. |
+| G5 | From the initial state, A folds. | Hand ends immediately. B receives the **15**-chip pot; final stacks are A **195**, B **205**, pot **0**. No hole cards are revealed. |
+| G6 | From G2, B bets **10** and A folds. | B receives the **30**-chip pot; final stacks are A **190**, B **210**, pot **0**. This checks that B receives back chips already contributed to the pot. |
+| G7 | From the initial state, A raises to **20** (pays **15**); B raises to **30** (pays **20**). | Pot **50**; A **180**, B **170**; contributions **20/30**; A acts next. A may call **10** or fold, but a third raise is rejected. If A calls, pot **60**, stacks **170/170**, and the flop begins. |
+| G8 | From G2, B checks; A checks. | Turn begins with pot **20**, contributions **0/0**, four community cards total, and B acts first. A second or stale check from A does not advance another phase. |
+| G9 | Set a player to **10** chips while facing a **10**-chip call in a valid late-match state. | Call is unavailable because it would leave zero chips; fold remains legal. Trying to call is rejected without a negative stack, changed pot, or changed turn. |
+| G10 | Finish a hand with one player's stack at **10** when the unit is **10**. | The match ends instead of starting another hand, because the next full big blind would leave that player at zero. No blind is posted and no new cards are dealt. |
+| G11 | Start a second hand when both stacks are above **10** and both players choose Ready. | Button alternates: B posts the small blind and acts first before the flop; A posts the big blind and acts first after the flop. The two stack changes and pot equal the posted blinds. |
+| G12 | In one round use both allowed raises; then reach the next round. | A third raise is unavailable in the first round. The raise count resets to **0** in the next round, where a new opening bet and up to two raises are possible if both players can afford them. |
+
+### Rejections, room access, and repeated requests
+
+For every rejected request, compare a complete authoritative state snapshot before and after: stacks, pot, round contributions, deck position, hole cards, board, phase, actor, raise count, winner, and turn deadline. None may change. An error message may be returned, but it must be player-specific and reveal no private cards.
+
+| ID | Input or action sequence | Expected result |
+| --- | --- | --- |
+| R1 | B sends any action while A is first to act. | Reject as out of turn; initial pot remains **15**, stacks **195/190**, actor A. |
+| R2 | A tries to check in the initial state, bet while facing the blind, raise by a custom amount, or send an unknown action. | Reject each; no state change. |
+| R3 | From G7, A attempts a third raise. | Reject at the cap; pot remains **50**, contributions **20/30**, actor A. |
+| R4 | A's call in G2 has action ID `a1`; send `a1` again after B becomes the actor. | Return the recorded outcome for `a1`; the second request does not add another **5** to the pot or change the actor. The same ID attached to a *different* action is rejected. |
+| R5 | Create a room with bet unit **0**, **3**, or **22**; try to change the unit after B joins. | Reject each. The existing room and bet unit remain unchanged. Accept even whole-chip values from **2** through **20**. |
+| R6 | Join with an invalid code, join a room already holding A and B, or try to claim A's seat with only the room code. | Reject; neither seat nor game state changes. |
+| R7 | Present an invalid, expired, or other player's reconnect token. | Reject without replacing the connected player or leaking their cards. A valid token reclaims only its original seat. |
+| R8 | A submits a call and a raise with different IDs at nearly the same time from two connections. | The server serializes them. Exactly one applies; the other is rejected as out of turn after the actor changes. The pot and stacks match whichever single action won, and chip total remains **400**. |
+| R9 | Create a room but do not admit B yet; send A an action or advance the fake clock by 30 seconds. | No hand is dealt, no turn timer runs, and no action can change the room. |
+| R10 | After a hand, A presses Ready twice while B has not pressed Ready. | Only one readiness flag is set. No new hand or blind posting occurs until B presses Ready. |
+
+### Timers, disconnects, and race boundaries
+
+Start a controllable clock at `t=0` when a turn begins. Do not use real sleeps in unit tests.
+
+| ID | Input or action sequence | Expected result |
+| --- | --- | --- |
+| T1 | From the initial state, A makes no move through `t=30s`. | A faces a blind and cannot check, so the server folds A once. B wins the pot; final stacks **195/205** and pot **0**. |
+| T2 | From G2, B has the first flop turn and makes no move through `t=30s`. | Check is legal, so the server checks B once. Pot stays **20**, board stays at three cards, and A becomes actor with a new 30-second turn. |
+| T3 | A disconnects **12 seconds** into A's turn and reconnects **19 seconds** later. | No move or timeout occurs during the pause. A reclaims the seat with **18 seconds** remaining, the same cards, pot, and actor. The other player did not receive A's hole cards. |
+| T4 | A disconnects and is still absent exactly **20 seconds** later. | A forfeits the match once; B is declared match winner; no further hand or turn action runs. Reconnecting after the deadline cannot resume the match. |
+| T5 | A reconnects just before the 20-second deadline. | The reconnect succeeds, the hand resumes, and no forfeit result is emitted. |
+| T6 | A sends a legal action just before the turn deadline, then an old timeout callback runs. | Only the action applies; the old timeout is ignored. An action arriving exactly at or after the deadline loses to the timeout. |
+| T7 | Both players disconnect during the grace period. | The room closes without a winner after the grace period; neither player is falsely awarded a match win. |
+| T8 | B is the active player but A disconnects. | The hand and B's turn timer pause. On A's timely return, B resumes with the time that remained, not a fresh 30 seconds. |
+
+### Cards, showdown, and privacy
+
+Use two fixed seven-card results whose rankings are obvious without a library. For a winner case, A has `As Ah`, B has `Kc Kd`, and the board is `2c 7d 9h Js 3c`: A's pair of aces beats B's pair of kings. For a tie case, A has `As Kh`, B has `Ac Kd`, and the board is `2c 4d 6h 8s Td`: both have the same ace-high five-card hand. Use the action path in G2 followed by checks on every later round, so the showdown pot is **20**.
+
+| ID | Input or action sequence | Expected result |
+| --- | --- | --- |
+| C1 | Winner fixture reaches showdown. | A wins **20**; final stacks A **210**, B **190**, pot **0**. Both hands may be revealed only in the showdown result. |
+| C2 | Tie fixture reaches showdown. | Each receives **10**; final stacks return to **200/200**, pot **0**. |
+| C3 | Supply a fixed deck with a duplicate card or fewer than enough unique cards for a hand. | Reject the fixture/deal before state changes. No player sees an incomplete hand. |
+| C4 | Capture **every** outbound message to A and B from join through G3, plus timer updates, errors, and both reconnect snapshots. | Before showdown, A's messages never contain B's `Kc` or `Kd`, and B's messages never contain A's `As` or `Ah`. Each sees only their own two hole cards plus currently revealed community cards. Error text sent to clients follows the same rule. |
+| C5 | End the winner fixture by fold or disconnect before showdown. | The result identifies the winner but does **not** reveal the losing player's hole cards in any outbound message. |
+| C6 | Inspect the flop, turn, and river messages for either player. | Board length is exactly **3**, then **4**, then **5**. Neither client receives a future board card early, and a reconnect snapshot contains only the current board. |
+
+The highest-value automated checks are G1-G8, R1-R4, T1-T6, and C4-C6: they exercise code we build. C1-C2 are integration checks for Treys and pot payout. The README's specific numbers are the independent expected results; the tests should assert them exactly. Planting a wrong turn, payout, or privacy filter should make the corresponding test fail.
 
 ## Implementation and attribution
 
@@ -81,9 +146,16 @@ We will pin actual dependency versions when implementation starts and document a
 
 ## Setup and demo
 
-Not available yet. Before submission, this section will include required versions, exact install and launch commands, a one-command check, and steps for a clean-start two-browser demo. The server, fixtures, and tests will run locally without private credentials.
+The first engine milestone was tested with Python **3.13.5** and uv **0.12.3**. The `.python-version` file selects Python 3.13, and `uv.lock` records the project environment. From a fresh clone:
+
+```sh
+cd /path/to/your/clone
+uv sync
+uv run python -m unittest discover -s tests -v
+```
+
+No credentials or configuration are required for these tests. There is no browser demo command yet. Before submission, this section must include exact launch commands and clean-start two-browser demo steps.
 
 ## Known limits of the first version
 
 The game supports heads-up play only, one active room per server process, fixed-size bets, and no all-ins or side pots. A player who cannot afford a call must fold. These are explicit scope choices; we will record any later change and why we made it.
-# poker-
