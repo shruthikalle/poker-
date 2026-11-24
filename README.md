@@ -2,7 +2,7 @@
 
 A browser-based, two-player Texas Hold'em game using **virtual chips only**. One player creates a private room and shares its code; the other joins from a second browser. The server owns the deck, rules, timers, and game state. Each browser receives only the information that player is allowed to see.
 
-This README is the project plan and test specification. The first Python game-engine milestone is runnable and tested; the browser, WebSocket server, timers, reconnects, and showdown payout are still to be built.
+This README is the project plan and test specification. The Python game engine now runs through showdown and can start another hand. The browser, WebSocket server, timers, reconnects, and player-specific message filtering are still to be built.
 
 Team: Srishruthik Alle and Deepthi Morusupalli. Contact: shruthik.alle@gmail.com; Deepthi's contact email will be added after she provides it.
 
@@ -24,7 +24,7 @@ These are deliberate rules for the first version, so the UI, server, and tests c
 | Chips | Each player starts with 20 times the chosen bet unit in virtual chips. There is no real-money play. |
 | Bet unit | The host chooses an even whole-chip amount from 2 to 20 before the second player joins. It cannot change during a match. |
 | Blinds | The dealer/button posts a small blind of half the bet unit; the other player posts a big blind of one bet unit. The button alternates after each hand. |
-| Deal | Each player gets two private cards. Community cards are dealt as flop (3), turn (1), and river (1). |
+| Deal | Each player gets two private cards. The button receives the first card, then cards alternate. The next five cards become the flop (3), turn (1), and river (1). This simplified version does not burn cards. |
 | Turn order | The small blind acts first before the flop. The big blind acts first on each later betting round. |
 | Actions | Fold, check, call, bet, and raise. The server decides which are legal from the current state; the browser only displays those choices. |
 | Bet size | An opening bet is one bet unit. A raise increases the current wager by exactly one bet unit, so the player pays the amount needed to call **plus** one bet unit. The big blind counts as the opening wager before the flop. At most two raises follow an opening wager in each round. No custom amounts, all-ins, or side pots. |
@@ -60,11 +60,13 @@ Srishruthik and Deepthi agreed to this split. The repository's commit history an
 
 The boundary between the parts is a server-side game API: the real-time layer submits a player identity and requested action; the game engine returns the new state or a rejection. Only the real-time layer converts state into player-specific messages. Neither browser is trusted to calculate the pot, choose the next turn, or decide the winner.
 
-The current engine API is `new_game(bet_unit=10, deck=None)`, `legal_actions(state, player)`, and `apply_action(state, player, action)`. `apply_action` returns an `ActionResult` with `accepted`, `state`, and `error`. On rejection, `state` is the original unchanged object. On success, it is a new immutable state. The WebSocket layer will authenticate players, serialize requests, deduplicate action IDs, and send filtered views; those parts are not implemented yet.
+The engine API is `new_game(bet_unit=10, deck=None)`, `legal_actions(state, player)`, and `apply_action(state, player, action, *, deck=None)`. `apply_action` returns an `ActionResult` with `accepted`, `state`, and `error`. On rejection, `state` is the original unchanged object. On success, it is a new immutable state. The optional `deck` argument is only for the **second** Ready action and allows a prepared next hand in tests; normal play omits it.
+
+At showdown, the engine evaluates and awards the pot immediately, then sets `phase="showdown"`. This is the only completed-hand phase in which a client may see both hole-card pairs. A fold sets `phase="finished"` and must not reveal the opponent's cards. `winner=None` in a showdown means a tie; `match_winner` is set when a player cannot fund the next big blind. The WebSocket layer will authenticate players, serialize requests, deduplicate action IDs, handle turn and disconnect clocks, and send filtered views. Those parts are not implemented yet. **Never serialize `GameState` directly to a client:** it includes both private hands and the remaining deck.
 
 ## Test cases and expected results
 
-These are specifications to turn into automated tests. **G1, G2, G5, G7, R1, and R3 are implemented and passing; the other numbered cases are planned, not passing results.** Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store the actual fixture files and runnable tests with the code. Expected pot and stack values below are calculated from the stated rules, independently of the implementation or Treys.
+These are specifications to turn into automated tests. Engine tests now cover the numeric and rule portions of **G1-G12, R1-R3, R5, R10, and C1-C3**. Tests for room access, action IDs, timers, reconnects, and outbound privacy messages remain planned; the privacy assertion in G5 is also pending. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store the actual fixture files and runnable tests with the code. Expected pot and stack values below are calculated from the stated rules, independently of the implementation or Treys.
 
 ### Common fixture
 
@@ -77,7 +79,7 @@ Unless a case says otherwise, set bet unit **10**, player **A** as the first but
 | G1 | Start a hand from the common fixture. | Only A may act. A may fold, call **5**, or raise to a total round contribution of **20** (paying **15**). A cannot check or make a new opening bet while facing the blind. |
 | G2 | A calls **5**; B checks. | After the call: pot **20**, A **190**, B **190**, B's turn. After B checks: flop begins, contributions reset to **0/0**, three community cards appear, pot stays **20**, and B acts first. |
 | G3 | From G2, B bets **10**; A calls **10**. | After B bets: pot **30**, A **190**, B **180**, A's turn. After A calls: pot **40**, A **180**, B **180**; turn begins, contributions reset, one more community card appears, and B acts first. |
-| G4 | From G3, B checks; A checks; B checks; A checks. | The first pair of checks advances from turn to river, revealing one card. The second pair advances to showdown. Pot remains **40** throughout; no extra cards are dealt. |
+| G4 | From G3, B checks; A checks; B checks; A checks. | The first pair of checks advances from turn to river, revealing one card. The second pair reaches showdown. Pot stays **40** until showdown, then is awarded and becomes **0**; no extra cards are dealt. |
 | G5 | From the initial state, A folds. | Hand ends immediately. B receives the **15**-chip pot; final stacks are A **195**, B **205**, pot **0**. No hole cards are revealed. |
 | G6 | From G2, B bets **10** and A folds. | B receives the **30**-chip pot; final stacks are A **190**, B **210**, pot **0**. This checks that B receives back chips already contributed to the pot. |
 | G7 | From the initial state, A raises to **20** (pays **15**); B raises to **30** (pays **20**). | Pot **50**; A **180**, B **170**; contributions **20/30**; A acts next. A may call **10** or fold, but a third raise is rejected. If A calls, pot **60**, stacks **170/170**, and the flop begins. |
@@ -142,14 +144,15 @@ The project starts without an existing codebase. We plan to build the game logic
 - [Treys 0.1.8](https://pypi.org/project/treys/0.1.8/) for card representation and hand evaluation.
 - [WSOP rules](https://www.wsop.com/poker-games/texas-holdem/rules/) as a reference for hand and action terminology; our supported betting rules are specified above.
 
-We will pin actual dependency versions when implementation starts and document any additional reused code or assets with links. Course homework material will not be used. Agent-assisted code and each partner's contributions will be identified in the final slides and repository history.
+Treys is pinned to **0.1.8** in `pyproject.toml` and `uv.lock`. Codex generated the engine implementation and tests from the agreed rules and worked expected values; Srishruthik owns the engine work and should inspect, correct, and be able to explain it. Deepthi owns the real-time layer and browser, which are not built yet. We will document any additional reused code or assets with links. Course homework material will not be used. Actual partner and agent contributions will be identified in the final slides and repository history.
 
 ## Setup and demo
 
-The first engine milestone was tested with Python **3.13.5** and uv **0.12.3**. The `.python-version` file selects Python 3.13, and `uv.lock` records the project environment. From a fresh clone:
+The engine was tested with Python **3.13.5** and uv **0.12.3**. The `.python-version` file selects Python 3.13, and `uv.lock` records the project environment. From a fresh clone:
 
 ```sh
-cd /path/to/your/clone
+git clone https://github.com/shruthikalle/poker-.git
+cd poker-
 uv sync
 uv run python -m unittest discover -s tests -v
 ```
