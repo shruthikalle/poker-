@@ -2,7 +2,7 @@
 
 A browser-based, two-player Texas Hold'em game using **virtual chips only**. One player creates a private room and shares its code; the other joins from a second browser. The server owns the deck, rules, timers, and game state. Each browser receives only the information that player is allowed to see.
 
-This README records the current implementation and the new target plan from the supplied comprehensive project PDF. The Python engine runs through showdown and a second hand; the server and browser remain to be built. **The existing engine and numeric test cases below use the older rules.** The team selected the PDF rules as the target on November 25, 2026; they are documented in [docs/rules.md](docs/rules.md). The proposed Day 1 server contract is in [docs/protocol.md](docs/protocol.md).
+This README records the current implementation and the new target plan from the supplied comprehensive project PDF. The Python engine runs through showdown and a second hand. HTTP table admission exists; the WebSocket server and browser remain to be built. **The existing engine and numeric test cases below use the older rules.** The team selected the PDF rules as the target on November 25, 2026; they are documented in [docs/rules.md](docs/rules.md). The proposed Day 1 server contract is in [docs/protocol.md](docs/protocol.md).
 
 Team: Srishruthik Alle (SA59576) and Deepthi Morusupalli (dam6639), CS 378 Agentic Software Engineering.
 
@@ -14,7 +14,7 @@ Team: Srishruthik Alle (SA59576) and Deepthi Morusupalli (dam6639), CS 378 Agent
 | Srishruthik | FastAPI server, WebSockets, sessions, private views, browser, and integration tests | Review and approve [docs/protocol.md](docs/protocol.md), including join, identity, action, privacy, and error behavior |
 | Both | Shared interface, integration, reviews, evidence, demo, and slides | Agree on the two contracts before parallel implementation |
 
-The repo currently has the older-rule engine and 22 engine tests, but no server or browser. Its engine was generated with Codex under Srishruthik's direction before adopting this new ownership split. Future ownership does not change actual contribution history. Deepthi's first engine task is to inspect, revise, test, and be able to explain this existing code. No PDF milestone is treated as completed merely because it appears in the plan.
+The repo currently has the older-rule engine and 22 engine tests, plus a first FastAPI server milestone with four admission tests. It can create one table, join the second seat, and identify a seat from its private token. It has no WebSocket game flow or browser yet. Its engine was generated with Codex under Srishruthik's direction before adopting this new ownership split. Future ownership does not change actual contribution history. Deepthi's first engine task is to inspect, revise, test, and be able to explain this existing code. No PDF milestone is treated as completed merely because it appears in the plan.
 
 The repository's genuine first commit is `c29badee2f21e6542c67a176304460b14cea13b6` (a README-only commit on November 23, 2026). The first engine commit is `34aa241`. No later scaffold is presented as the starting point.
 
@@ -152,13 +152,13 @@ Under the older rule set, the highest-value automated checks are G1-G8, R1-R4, T
 
 ## Implementation and attribution
 
-The project started without an imported codebase. The existing engine and tests are now in this repository; the room protocol, privacy filtering, reconnect behavior, and browser interface remain to be built. Planned external dependencies are:
+The project started without an imported codebase. The existing engine, tests, and first HTTP admission endpoints are now in this repository; WebSocket actions, privacy filtering, reconnect behavior, and the browser interface remain to be built. External dependencies are:
 
 - [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) for server-to-browser communication.
 - [Treys 0.1.8](https://pypi.org/project/treys/0.1.8/) for card representation and hand evaluation.
 - [WSOP rules](https://www.wsop.com/poker-games/texas-holdem/rules/) as a reference for hand and action terminology; our supported betting rules are specified above.
 
-Treys is pinned to **0.1.8** in `pyproject.toml` and `uv.lock`. Codex generated the existing engine and tests under Srishruthik's direction for the older rules. The new plan assigns Deepthi the engine migration and Srishruthik the real-time layer and browser; neither migration nor server is built yet. We will document any additional reused code or assets with links. Course homework material will not be used. Actual partner and agent contributions will be identified in the final slides and repository history.
+Treys is pinned to **0.1.8** in `pyproject.toml` and `uv.lock`; FastAPI and Uvicorn are now pinned there too. Codex generated the existing engine and tests under Srishruthik's direction for the older rules. The new plan assigns Deepthi the engine migration and Srishruthik the real-time layer and browser. The first HTTP admission endpoints are built, but engine migration and real-time gameplay are not. We will document any additional reused code or assets with links. Course homework material will not be used. Actual partner and agent contributions will be identified in the final slides and repository history.
 
 ## Setup and demo
 
@@ -170,6 +170,8 @@ cd poker-
 uv sync
 uv run python -m unittest discover -s tests -v
 ```
+
+Start the current HTTP admission server with `uv run uvicorn server.main:app --reload`. `POST /api/table` creates the first seat; `POST /api/join` with a room code fills the second; `GET /api/session` with a Bearer token returns that token's seat. This is not yet a playable browser demo.
 
 No credentials or configuration are required for these tests. There is no browser demo command yet. Before submission, this section must include clean-start two-browser demo steps.
 
