@@ -146,6 +146,43 @@ class DeadlineTests(unittest.TestCase):
         self.assertEqual(view["board"], ["Ah", "Kh", "Qh"])
         self.assertNotIn('"Jc"', json.dumps(view))
 
+    def test_t2_flop_timeout_checks_once_and_gives_a_fresh_turn(self):
+        game = Game().playing()
+        game.command("A", action("call", 1))
+        game.drain("B")
+        game.command("B", action("bb-check", 2, "check"))
+        game.drain("A")
+        game.at(30)
+        game.coordinator.tick()
+        view = game.view("A")
+        self.assertEqual((view["phase"], view["actor"], view["pot"]), ("flop", "A", 20))
+        self.assertEqual(
+            (view["revision"], view["turn_clock"]["remaining_ms"]), (4, 30000)
+        )
+        self.assertEqual(view["last_automatic_action"]["action"], "check")
+        game.coordinator.tick()
+        self.assertEqual(game.rooms.snapshot().revision, 4)
+
+    def test_t3_and_t8_nonacting_absence_pauses_b_then_resumes_after_19_seconds(self):
+        game = Game().playing()
+        game.command("A", action("call", 1))
+        game.drain("B")
+        game.at(12)
+        game.disconnect("A")
+        paused = game.view("B")
+        self.assertEqual(
+            (paused["actor"], paused["turn_clock"]["remaining_ms"]), ("B", 18000)
+        )
+        game.at(31)
+        game.connect("A")
+        resumed = game.view("B")
+        self.assertEqual(
+            resumed["turn_clock"],
+            {"status": "running", "acting_player": "B", "remaining_ms": 18000},
+        )
+        self.assertEqual((resumed["pot"], resumed["revision"]), (20, 2))
+        self.assertEqual(resumed["own_hole_cards"], paused["own_hole_cards"])
+
     def test_read_rejection_and_replay_do_not_reset_clock_or_revise(self):
         game = Game().playing()
         call = action("call", 1)
@@ -422,3 +459,76 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task
+
+    async def test_simultaneous_late_reconnects_cannot_decide_a_winner(self):
+        game = Game().playing()
+        game.at(10)
+        game.disconnect("A")
+        game.disconnect("B")
+        game.at(30)
+        barrier = asyncio.Barrier(3)
+
+        async def reconnect(seat):
+            await barrier.wait()
+            game.connect(seat)
+
+        async with asyncio.TaskGroup() as group:
+            group.create_task(reconnect("A"))
+            group.create_task(reconnect("B"))
+            await barrier.wait()
+        for seat in ("A", "B"):
+            self.assertEqual(
+                game.view(seat)["match_result"],
+                {
+                    "reason": "both_absent",
+                    "winner": None,
+                },
+            )
+        self.assertEqual(game.rooms.snapshot().revision, 1)
+
+    async def test_writer_failure_pauses_using_current_ownership(self):
+        game = Game()
+        game.join()
+        a = game.connect("A", socket=FakeSocket(broken=True))
+        game.connect("B")
+        game.drain("B")
+        game.at(5)
+        await asyncio.wait_for(a.run(asyncio.Event().wait), 2)
+        game.coordinator.detach("A", a)
+        paused = game.view("B")
+        self.assertEqual(paused["turn_clock"]["remaining_ms"], 25000)
+        self.assertEqual(paused["disconnect_grace"]["A"], {"remaining_ms": 20000})
+        game.at(10)
+        game.connect("A")
+        game.coordinator.detach("A", a)
+        self.assertEqual(game.view("A")["turn_clock"]["remaining_ms"], 25000)
+
+    async def test_replacement_at_expiry_does_not_reset_clock(self):
+        game = Game().playing()
+        former = game.sockets["A"]
+        game.at(30)
+        game.connect("A")
+        replacement = game.view("A")
+        self.assertEqual(former.close_code, 4000)
+        self.assertEqual(replacement["result"], {"kind": "fold_win", "winner": "B"})
+        self.assertEqual(replacement["revision"], 2)
+        game.coordinator.detach("A", former)
+        self.assertEqual(game.view("A"), replacement)
+
+    async def test_scheduler_instances_do_not_share_clock_or_game(self):
+        first, second = Game().playing(), Game().playing()
+        workers = [
+            asyncio.create_task(game.coordinator.run_scheduler())
+            for game in (first, second)
+        ]
+        try:
+            first.at(30)
+            ended = await asyncio.wait_for(first.sockets["B"].queue.get(), 2)
+            self.assertEqual(ended["revision"], 2)
+            self.assertTrue(second.sockets["B"].queue.empty())
+            self.assertEqual(second.view("B")["turn_clock"]["remaining_ms"], 30000)
+            self.assertEqual(second.rooms.snapshot().revision, 1)
+        finally:
+            for worker in workers:
+                worker.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)

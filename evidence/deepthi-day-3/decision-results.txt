@@ -1,0 +1,4 @@
+reset-on-reconnect: deadline=50, active_seconds=42
+production pause/resume: deadline=38, active_seconds=30
+callback-only model at t=35 before the callback: late_call=True pot=20
+production ingress at t=35 before the scheduler: late_call=False automatic=fold pot=0 revision=2
