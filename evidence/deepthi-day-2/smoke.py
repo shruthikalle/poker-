@@ -12,6 +12,13 @@ from server.fixtures import fixed_deck
 HTTP = "http://127.0.0.1:8000"
 WS = "ws://127.0.0.1:8000/ws"
 HAND_FIELDS = {
+    "lifecycle",
+    "lifecycle_revision",
+    "presence",
+    "turn_clock",
+    "disconnect_grace",
+    "match_result",
+    "last_automatic_action",
     "type",
     "status",
     "seat",
@@ -206,6 +213,17 @@ def main():
                 "seat": "A",
                 "bet_unit": 10,
                 "revision": 0,
+                "lifecycle": "waiting",
+                "lifecycle_revision": 1,
+                "presence": {"A": True, "B": False},
+                "turn_clock": {
+                    "status": "inactive",
+                    "acting_player": None,
+                    "remaining_ms": None,
+                },
+                "disconnect_grace": {"A": None, "B": None},
+                "match_result": None,
+                "last_automatic_action": None,
             }, (
                 f"expected waiting snapshot, received {waiting.get('type')} ({waiting.get('code')})"
             )
@@ -214,6 +232,9 @@ def main():
                 "/api/rooms/join", json={"room_code": host["room_code"]}
             )
             assert joined.status_code == 200
+            waiting_for_b = receive(a)
+            assert waiting_for_b["lifecycle"] == "awaiting_players"
+            assert waiting_for_b["turn_clock"]["status"] == "inactive"
             guest = joined.json()
             assert guest["session_token"] != host["session_token"]
             with connect(WS, proxy=None, open_timeout=3, close_timeout=1) as b:

@@ -2,9 +2,11 @@
 
 import json
 from asyncio import wait_for
+from contextlib import asynccontextmanager
 from typing import Literal
 from urllib.parse import urlsplit
 
+from anyio import create_task_group
 from fastapi import (
     FastAPI,
     Header,
@@ -19,9 +21,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from server.clock import Clock
 from server.commands import COMMAND_SCHEMA
 from server.connections import Connection
 from server.coordinator import GameCoordinator
+from server.timers import DISCONNECT_GRACE, TURN_DURATION
 from server.sessions import SessionError, SessionStore
 
 from .engine import Player
@@ -167,12 +171,32 @@ async def _lobby_socket(
 
 
 def create_app(
-    rooms: RoomManager | None = None, *, lobby_errors: bool = False
+    rooms: RoomManager | None = None,
+    *,
+    lobby_errors: bool = False,
+    clock: Clock | None = None,
+    turn_duration: int = TURN_DURATION,
+    grace_duration: int = DISCONNECT_GRACE,
 ) -> FastAPI:
-    app = FastAPI(title="Heads-Up Live Poker")
     manager = RoomManager() if rooms is None else rooms
     sessions = SessionStore(manager=manager)
-    coordinator = GameCoordinator(manager)
+    coordinator = GameCoordinator(
+        manager,
+        clock=clock,
+        turn_duration=turn_duration,
+        grace_duration=grace_duration,
+    )
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        async with create_task_group() as tasks:
+            tasks.start_soon(coordinator.run_scheduler)
+            try:
+                yield
+            finally:
+                tasks.cancel_scope.cancel()
+
+    app = FastAPI(title="Heads-Up Live Poker", lifespan=lifespan)
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(

@@ -16,7 +16,7 @@ DeadlinePair = tuple[int | None, int | None]
 
 @dataclass(frozen=True)
 class MatchResult:
-    reason: Literal["engine", "forfeit", "both_absent"]
+    reason: Literal["engine", "forfeit", "both_absent", "engine_error"]
     winner: Player | None
 
 

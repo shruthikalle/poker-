@@ -65,7 +65,9 @@ async def atomic():
     coordinator = GameCoordinator(rooms)
     connection = Connection(None, gameplay=True)
     assert coordinator.attach("test-token-a", connection) == "A"
-    connection.queue.get_nowait()
+    assert coordinator.attach("test-token-b", Connection(None, gameplay=True)) == "B"
+    while not connection.queue.empty():
+        connection.queue.get_nowait()
     request = ActionCommand(
         type="action", action_id="call-1", hand_id=1, expected_revision=1, action="call"
     )

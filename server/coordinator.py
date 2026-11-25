@@ -1,17 +1,28 @@
 """Authorize, commit and publish gameplay under the room's lock."""
 
+import asyncio
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from logging import getLogger
 from typing import TypeVar
 
-from poker.engine import Player, apply_action
+from poker.engine import Player, apply_action, legal_actions
 from poker.rooms import Room, RoomManager
 
+from .clock import Clock, MonotonicClock
 from .commands import ActionCommand, Command
 from .connections import Connection, ConnectionRegistry
+from .timers import (
+    DISCONNECT_GRACE,
+    TURN_DURATION,
+    AutomaticAction,
+    MatchResult,
+    Timing,
+)
 from .views import player_view
 
 REJECTED_REPLAY_CAPACITY = 256
+logger = getLogger(__name__)
 AdmissionResult = TypeVar("AdmissionResult")
 
 
@@ -36,11 +47,24 @@ class Acknowledgment:
 
 class GameCoordinator:
     def __init__(
-        self, rooms: RoomManager, *, replay_capacity: int = REJECTED_REPLAY_CAPACITY
+        self,
+        rooms: RoomManager,
+        *,
+        replay_capacity: int = REJECTED_REPLAY_CAPACITY,
+        clock: Clock | None = None,
+        turn_duration: int = TURN_DURATION,
+        grace_duration: int = DISCONNECT_GRACE,
     ):
         self._rooms = rooms
         self._connections = ConnectionRegistry()
+        if replay_capacity < 1 or min(turn_duration, grace_duration) < 1:
+            raise ValueError("replay capacity and durations must be positive")
         self._capacity = replay_capacity
+        self._clock = clock or MonotonicClock()
+        self._turn_duration = turn_duration
+        self._grace_duration = grace_duration
+        self._timing = Timing()
+        self._changed = asyncio.Event()
         self._accepted: dict[
             tuple[Player, int], dict[str, tuple[Command, Acknowledgment]]
         ] = {}
@@ -52,52 +76,160 @@ class GameCoordinator:
         self, join: Callable[[str], AdmissionResult], room_code: str
     ) -> AdmissionResult:
         with self._rooms.synchronized():
+            now = self._clock.now_ns()
+            self._reconcile(now)
             admission = join(room_code)
             room = self._rooms.snapshot()
             assert room is not None and room.hand is not None
-            self._publish_game(room)
+            self._publish_game(room, now)
             self._connections.publish_lobby(table_ready=True)
+            self._sync_presence(now)
             return admission
 
     def attach(self, token: str, connection: Connection) -> Player | None:
         with self._rooms.synchronized():
+            now = self._clock.now_ns()
+            self._reconcile(now)
             view = self._rooms.authenticate(token)
             if view is None:
                 return None
             self._connections.attach(view.seat, connection)
             room = self._rooms.snapshot()
             assert room is not None
-            if connection.gameplay:
-                connection.offer(player_view(room, view.seat, room.revision))
+            if not self._sync_presence(now) and connection.gameplay:
+                connection.offer(self._view(room, view.seat, now))
             self._connections.publish_lobby(room.status == "ready")
+            self._sync_presence(now)
             return view.seat
 
     def detach(self, seat: Player, connection: Connection) -> None:
         with self._rooms.synchronized():
+            now = self._clock.now_ns()
+            self._reconcile(now)
             if self._connections.detach_if_current(seat, connection):
                 room = self._rooms.snapshot()
                 assert room is not None
                 self._connections.publish_lobby(room.status == "ready")
+            self._sync_presence(now)
 
-    def reply(self, seat: Player, connection: Connection, payload: dict[str, object]):
+    def reply(
+        self, seat: Player, connection: Connection, payload: dict[str, object]
+    ) -> None:
         with self._rooms.synchronized():
+            now = self._clock.now_ns()
+            self._reconcile(now)
             if self._connections.is_current(seat, connection):
                 connection.offer(payload)
+            self._sync_presence(now)
 
     def snapshot(self, seat: Player, connection: Connection) -> None:
         with self._rooms.synchronized():
+            now = self._clock.now_ns()
+            self._reconcile(now)
             if self._connections.is_current(seat, connection):
                 room = self._rooms.snapshot()
                 assert room is not None
-                connection.offer(player_view(room, seat, room.revision))
+                connection.offer(self._view(room, seat, now))
+            self._sync_presence(now)
 
-    def _publish_game(self, room: Room) -> None:
+    def _view(self, room: Room, seat: Player, now: int) -> dict[str, object]:
+        return player_view(room, seat, room.revision, self._timing, now)
+
+    def _publish_game(self, room: Room, now: int) -> None:
         for seat, connection in self._connections.active():
             if connection.gameplay:
-                connection.offer(player_view(room, seat, room.revision))
+                connection.offer(self._view(room, seat, now))
+
+    def _set_timing(self, timing: Timing) -> None:
+        if timing != self._timing:
+            self._timing = timing
+            self._changed.set()
+
+    def _sync_presence(self, now: int) -> bool:
+        room = self._rooms.snapshot()
+        if room is None:
+            return False
+        published = False
+        # Each repeat can only lose another of the two writers to overflow.
+        while True:
+            active = {
+                seat
+                for seat, connection in self._connections.active()
+                if connection.gameplay
+            }
+            timing = self._timing.with_presence(
+                ("A" in active, "B" in active),
+                room.hand,
+                now,
+                self._turn_duration,
+                self._grace_duration,
+            )
+            if timing is self._timing:
+                return published
+            self._set_timing(timing)
+            self._publish_game(room, now)
+            published = True
+
+    def _reconcile(self, now: int) -> None:
+        room = self._rooms.snapshot()
+        if room is None or room.hand is None:
+            return
+        result = self._timing.disconnect_result(now)
+        if result is not None:
+            self._set_timing(self._timing.finish(result))
+            self._publish_game(room, now)
+            return
+        deadline = self._timing.turn_deadline
+        if deadline is None or deadline > now:
+            return
+        hand = room.hand
+        actor = hand.actor
+        actions = legal_actions(hand, actor) if actor is not None else frozenset()
+        if actor is None or actions.isdisjoint({"check", "fold"}):
+            self._timing_failure(room, now)
+            return
+        move = "check" if "check" in actions else "fold"
+        transition = apply_action(hand, actor, move)
+        if not transition.accepted or transition.state == hand:
+            self._timing_failure(room, now)
+            return
+        committed = self._rooms.commit_hand(room, transition.state)
+        timing = self._timing.with_hand(transition.state, now, self._turn_duration)
+        self._set_timing(
+            replace(
+                timing,
+                last_automatic_action=AutomaticAction(hand.hand_number, actor, move),
+            )
+        )
+        self._publish_game(committed, now)
+
+    def _timing_failure(self, room: Room, now: int) -> None:
+        logger.error(
+            "Engine rejected its automatic action at revision %d", room.revision
+        )
+        self._set_timing(self._timing.finish(MatchResult("engine_error", None)))
+        self._publish_game(room, now)
+
+    def tick(self) -> None:
+        with self._rooms.synchronized():
+            now = self._clock.now_ns()
+            self._reconcile(now)
+            self._sync_presence(now)
+
+    async def run_scheduler(self) -> None:
+        while True:
+            with self._rooms.synchronized():
+                self.tick()
+                deadline = self._timing.next_deadline
+                self._changed.clear()
+            # A wakeup never owns an old turn; it rereads the current deadline.
+            await self._clock.wait(self._changed, deadline)
 
     def submit(self, seat: Player, connection: Connection, command: Command) -> None:
         with self._rooms.synchronized():
+            now = self._clock.now_ns()
+            self._reconcile(now)
+            self._sync_presence(now)
             if (
                 not self._connections.is_current(seat, connection)
                 or not connection.gameplay
@@ -114,6 +246,7 @@ class GameCoordinator:
 
             if previous is not None and previous[0] == command:
                 connection.offer(previous[1].message())
+                self._sync_presence(now)
                 return
 
             eligible = (
@@ -127,6 +260,12 @@ class GameCoordinator:
                 error = "NOT_READY"
             elif command.hand_id != hand.hand_number:
                 error = "WRONG_HAND"
+            elif self._timing.result is not None:
+                error = "MATCH_COMPLETE"
+            elif not self._timing.activated:
+                error = "NOT_READY"
+            elif not all(self._timing.presence):
+                error = "MATCH_PAUSED"
             elif command.expected_revision != room.revision:
                 error = "STALE_REVISION"
             else:
@@ -153,9 +292,13 @@ class GameCoordinator:
 
             connection.offer(outcome.message())
             if updated is not room:
-                self._publish_game(updated)
+                self._set_timing(
+                    self._timing.with_hand(updated.hand, now, self._turn_duration)
+                )
+                self._publish_game(updated, now)
             elif error in {"WRONG_HAND", "STALE_REVISION"}:
-                connection.offer(player_view(room, seat, room.revision))
+                connection.offer(self._view(room, seat, now))
+            self._sync_presence(now)
 
     def _apply(
         self, room: Room, seat: Player, command: Command

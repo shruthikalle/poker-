@@ -37,6 +37,7 @@ class CoordinatorTests(unittest.TestCase):
         self.game.admit(self.rooms.join, room_code)
         self.a = self.attach("A")
         self.b = self.attach("B")
+        self.assertEqual(self.a.queue.get_nowait()["lifecycle"], "active")
 
     def attach(self, seat):
         connection = Connection(None, gameplay=True)
@@ -278,7 +279,8 @@ class DeliveryTests(unittest.IsolatedAsyncioTestCase):
                 await self.asyncSetUp()
                 a = self.attach("A", FakeSocket())
                 self.attach("B", FakeSocket())
-                a.queue.get_nowait()
+                while not a.queue.empty():
+                    a.queue.get_nowait()
                 barrier = asyncio.Barrier(3)
 
                 async def submit(message):
@@ -319,13 +321,19 @@ class DeliveryTests(unittest.IsolatedAsyncioTestCase):
             self.game.submit("A", a, action("call", 1))
             self.game.submit("B", b, action("check", 2, "check"))
             slow.blocked.set()
-            messages = [await self.receive(slow) for _ in range(4)]
+            messages = [await self.receive(slow) for _ in range(5)]
             self.assertEqual(
                 [
                     (m["type"], m.get("revision", m.get("outcome_revision")))
                     for m in messages
                 ],
-                [("snapshot", 1), ("action_ack", 2), ("snapshot", 2), ("snapshot", 3)],
+                [
+                    ("snapshot", 1),
+                    ("snapshot", 1),
+                    ("action_ack", 2),
+                    ("snapshot", 2),
+                    ("snapshot", 3),
+                ],
             )
         finally:
             idle.set()
@@ -334,7 +342,8 @@ class DeliveryTests(unittest.IsolatedAsyncioTestCase):
     async def test_one_legal_seat_wins_against_a_competing_wrong_turn(self):
         a, b = self.attach("A", FakeSocket()), self.attach("B", FakeSocket())
         for connection in (a, b):
-            connection.queue.get_nowait()
+            while not connection.queue.empty():
+                connection.queue.get_nowait()
         barrier = asyncio.Barrier(3)
 
         async def submit(seat, connection):

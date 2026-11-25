@@ -12,6 +12,16 @@ from poker.server import create_app
 from server.fixtures import fixed_deck
 from test_views import HAND_FIELDS
 
+TIMING_FIELDS = {
+    "lifecycle",
+    "lifecycle_revision",
+    "presence",
+    "turn_clock",
+    "disconnect_grace",
+    "match_result",
+    "last_automatic_action",
+}
+
 CHECK_THROUGH = ("A", "B", "B", "A", "B", "A", "B", "A")
 
 
@@ -51,6 +61,17 @@ class GameplaySocketTests(unittest.TestCase):
                         "seat": "A",
                         "bet_unit": 10,
                         "revision": 0,
+                        "lifecycle": "waiting",
+                        "lifecycle_revision": 1,
+                        "presence": {"A": True, "B": False},
+                        "turn_clock": {
+                            "status": "inactive",
+                            "acting_player": None,
+                            "remaining_ms": None,
+                        },
+                        "disconnect_grace": {"A": None, "B": None},
+                        "match_result": None,
+                        "last_automatic_action": None,
                     },
                 )
                 a.send_json(wire_action("waiting", "fold", 0))
@@ -60,6 +81,11 @@ class GameplaySocketTests(unittest.TestCase):
                     "/api/rooms/join", json={"room_code": host["room_code"]}
                 )
                 self.assertEqual(joined.status_code, 200)
+                dealt = a.receive_json()
+                self.assertEqual(
+                    (dealt["revision"], dealt["lifecycle"]), (1, "awaiting_players")
+                )
+                self.assertEqual(dealt["turn_clock"]["status"], "inactive")
                 with client.websocket_connect("/ws") as b:
                     self.auth(b, joined.json()["session_token"])
                     self.sockets = {"A": a, "B": b}
@@ -91,7 +117,7 @@ class GameplaySocketTests(unittest.TestCase):
             }[phase]
         ]
         for seat, view in views.items():
-            self.assertEqual(set(view), HAND_FIELDS)
+            self.assertEqual(set(view), HAND_FIELDS | TIMING_FIELDS)
             self.assertEqual(view["type"], "snapshot")
             self.assertEqual(view["status"], "ready")
             self.assertEqual((view["seat"], view["bet_unit"]), (seat, 10))
@@ -447,5 +473,16 @@ class GameplaySocketTests(unittest.TestCase):
                             "seat": "A",
                             "bet_unit": 12,
                             "revision": 0,
+                            "lifecycle": "waiting",
+                            "lifecycle_revision": 1,
+                            "presence": {"A": True, "B": False},
+                            "turn_clock": {
+                                "status": "inactive",
+                                "acting_player": None,
+                                "remaining_ms": None,
+                            },
+                            "disconnect_grace": {"A": None, "B": None},
+                            "match_result": None,
+                            "last_automatic_action": None,
                         },
                     )

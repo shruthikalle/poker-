@@ -17,3 +17,30 @@ def fixed_deck(scenario: Scenario) -> tuple[str, ...]:
         for suit in "cdhs"
         if (card := rank + suit) not in prefix
     )
+
+
+class ManualClock:
+    """An event-loop-owned monotonic clock for deterministic verification."""
+
+    def __init__(self):
+        self._now = 0
+        self._waiting = None
+
+    def now_ns(self):
+        return self._now
+
+    def advance_to(self, nanoseconds):
+        if nanoseconds < self._now:
+            raise ValueError("a monotonic clock cannot go backward")
+        self._now = nanoseconds
+        if self._waiting is not None:
+            self._waiting.set()
+
+    async def wait(self, changed, deadline):
+        if deadline is not None and deadline <= self._now:
+            return
+        self._waiting = changed
+        try:
+            await changed.wait()
+        finally:
+            self._waiting = None
