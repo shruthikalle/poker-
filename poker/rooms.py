@@ -1,12 +1,12 @@
 """In-memory room admission independent of the network transport."""
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from secrets import token_urlsafe
 from threading import Lock
 from typing import Literal
 
-from .engine import GameState, Player
+from .engine import GameState, Player, new_game
 
 RoomStatus = Literal["waiting", "ready"]
 
@@ -16,6 +16,14 @@ class InvalidBetUnit(ValueError):
 
 
 class RoomAlreadyExists(Exception):
+    pass
+
+
+class RoomNotFound(Exception):
+    pass
+
+
+class RoomFull(Exception):
     pass
 
 
@@ -66,6 +74,27 @@ class RoomManager:
             room = Room(self._code_factory(), bet_unit, self._token_factory())
             self._room = room
             return Admission(room.code, "A", room.seat_a_token, bet_unit, room.status)
+
+    def join(self, room_code: object) -> Admission:
+        with self._lock:
+            room = self._room
+            if room is None or type(room_code) is not str or room_code != room.code:
+                raise RoomNotFound("room not found")
+            if room.seat_b_token is not None:
+                raise RoomFull("room is full")
+
+            for _ in range(8):
+                token = self._token_factory()
+                if token != room.seat_a_token:
+                    break
+            else:
+                raise RuntimeError("could not generate a unique session token")
+
+            joined = replace(
+                room, seat_b_token=token, hand=new_game(bet_unit=room.bet_unit)
+            )
+            self._room = joined
+            return Admission(joined.code, "B", token, joined.bet_unit, joined.status)
 
     def snapshot(self) -> Room | None:
         """Return the immutable server-side state for inspection."""
