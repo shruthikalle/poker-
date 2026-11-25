@@ -1,0 +1,80 @@
+Live Day 3 validation. Every scenario used a fresh Uvicorn process.
+All launches bind 127.0.0.1:8000, use one worker, websockets-sansio, and
+a 4096-byte WebSocket frame limit.
+
+Compatibility
+$ uv run --locked python evidence/deepthi-day-1/smoke.py
+$ uv run --locked python evidence/integration-day1-day3/smoke.py
+GET /health -> 200
+POST /api/rooms -> 422
+POST /api/rooms -> 201
+WebSocket A -> waiting (status fields only)
+POST /api/rooms/join -> 200
+WebSocket B -> ready (status fields only)
+POST /api/rooms/join -> 409
+WebSocket room code -> 1008 (no application payload)
+Day 1 smoke checks passed
+POST /api/rooms -> 201 (A waiting, bet unit 12)
+POST /api/join with unknown Unicode code -> 404
+POST /api/join -> 201 (B joins A's room, A receives lobby update)
+GET /api/session -> 200 (B identity only)
+WebSocket B replacement -> old socket closed 4000, new socket pong
+WebSocket lobby presence -> A observes B disconnect
+POST /api/rooms/join -> 409 (shared room full)
+Integration smoke checks passed
+
+Prior gameplay fixtures (launch:showdown for fold, launch:tie for tie)
+$ uv run --locked python evidence/deepthi-day-2/smoke.py --scenario showdown
+$ uv run --locked python evidence/deepthi-day-2/smoke.py --scenario fold
+$ uv run --locked python evidence/deepthi-day-2/smoke.py --scenario tie
+A authenticated and waiting at revision 0
+revision 1 preflop: A/B 195/190, pot 15
+revision 2 preflop: A/B 190/190, pot 20
+replay, conflict, stale revision, and wrong turn verified at revision 2
+revision 3 flop: A/B 190/190, pot 20
+revision 4 flop: A/B 190/190, pot 20
+revision 5 turn: A/B 190/190, pot 20
+revision 6 turn: A/B 190/190, pot 20
+revision 7 river: A/B 190/190, pot 20
+revision 8 river: A/B 190/190, pot 20
+revision 9 showdown: A/B 210/190, pot 0
+showdown gameplay smoke passed
+A authenticated and waiting at revision 0
+revision 1 preflop: A/B 195/190, pot 15
+revision 2 finished: A/B 195/205, pot 0
+fold gameplay smoke passed
+A authenticated and waiting at revision 0
+revision 1 preflop: A/B 195/190, pot 15
+revision 2 preflop: A/B 190/190, pot 20
+replay, conflict, stale revision, and wrong turn verified at revision 2
+revision 3 flop: A/B 190/190, pot 20
+revision 4 flop: A/B 190/190, pot 20
+revision 5 turn: A/B 190/190, pot 20
+revision 6 turn: A/B 190/190, pot 20
+revision 7 river: A/B 190/190, pot 20
+revision 8 river: A/B 190/190, pot 20
+revision 9 showdown: A/B 200/200, pot 0
+tie gameplay smoke passed
+
+Day 3 fixture launch (use launch:recovery for the last three scenarios)
+$ uv run --locked uvicorn launch:timeout --factory --app-dir evidence/deepthi-day-3 --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+$ uv run --locked python evidence/deepthi-day-3/smoke.py --scenario timeout-fold
+$ uv run --locked python evidence/deepthi-day-3/smoke.py --scenario timeout-check
+$ uv run --locked python evidence/deepthi-day-3/smoke.py --scenario reconnect
+$ uv run --locked python evidence/deepthi-day-3/smoke.py --scenario forfeit
+$ uv run --locked python evidence/deepthi-day-3/smoke.py --scenario both-absent
+automatic A fold: B wins hand, A/B 195/205, pot 0
+timeout-fold smoke passed
+automatic B check: flop, A/B 190/190, pot 20
+timeout-check smoke passed
+disconnect paused the turn; reconnect restored exactly the sampled saved time
+A retained private cards and a legal call advanced both views to pot 20
+reconnect smoke passed
+forfeit: winner=B, stacks and pot preserved
+late authenticated observation retained privacy and could not reopen the match
+forfeit smoke passed
+both_absent: winner=None, stacks and pot preserved
+late authenticated observation retained privacy and could not reopen the match
+both-absent smoke passed
+
+All ten scenarios exited 0.

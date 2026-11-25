@@ -89,7 +89,7 @@ messages select their reply format. The legacy `server.main:app` launch
 also keeps the lobby error response for ambiguous malformed first
 messages. The `poker.server:create_app` launch closes those without a payload.
 
-## Day 2 gameplay protocol
+## Gameplay protocol
 
 Use the same persistent `/ws` endpoint. Send this first as a JSON text frame
 within five seconds of connecting.
@@ -103,7 +103,7 @@ replaces the old persistent connection for that seat. The old connection
 closes with 4000. Replacement participates in the same room transaction as
 commands. A command that commits first remains valid. A replacement that
 commits first revokes the old connection before its next command can apply.
-Old-socket teardown can remove only its own registration. A new connection
+Old-socket teardown can remove only its own registration. A new gameplay connection
 always gets a current personalized snapshot. Existing two-field `auth`
 clients continue receiving lobby broadcasts. The one-time `authenticate`
 status path remains available.
@@ -140,7 +140,8 @@ A well-formed command returns exactly these acknowledgment fields, with
 | --- | --- |
 | `INVALID_MESSAGE` | A malformed or unsupported frame. Gameplay replies with `{"type":"error","code":"INVALID_MESSAGE"}`. |
 | `UNAUTHORIZED` | Invalid token on persistent auth. An error precedes close 1008. |
-| `NOT_READY` | No hand exists, or an existing lobby-only client sent a gameplay command. |
+| `NOT_READY` | Gameplay has not activated, or an existing lobby-only client sent a gameplay command. |
+| `MATCH_PAUSED` | A current gameplay participant is absent. |
 | `WRONG_HAND` | The command targets a different hand and has no eligible recorded outcome. |
 | `STALE_REVISION` | The supplied revision is older or newer than the room revision. |
 | `WRONG_TURN` | The authenticated seat cannot act on this betting turn. |
@@ -148,7 +149,6 @@ A well-formed command returns exactly these acknowledgment fields, with
 | `HAND_COMPLETE` | The betting hand has settled. |
 | `MATCH_COMPLETE` | The engine ended the match. |
 | `REPLAY_CONFLICT` | The same replay key was used with different validated content. |
-| `REPLAY_CAPACITY` | The seat reached the per-hand command budget. |
 
 `WRONG_HAND` and `STALE_REVISION` on a new command send a current
 snapshot to the caller after the acknowledgment. A rejected command does
@@ -159,8 +159,8 @@ on the server.
 
 ### Personalized snapshots
 
-The waiting snapshot has exactly `type: "snapshot"`, `status: "waiting"`,
-`seat`, `bet_unit`, and `revision: 0`. Admission of B atomically creates
+A waiting snapshot has `type: "snapshot"`, `status: "waiting"`,
+`seat`, `bet_unit`, `revision: 0`, and the lifecycle fields below. Admission of B atomically creates
 hand 1 at revision 1 and sends each gameplay socket its own view. A dealt
 snapshot sets `status: "ready"` and adds:
 
@@ -178,7 +178,28 @@ result is `{"kind":"fold_win","winner":"B"}` when B wins. Active hands
 have null result. A null engine winner means tie only at paid showdown.
 Opponent hole cards are withheld at every other phase, including folds.
 The deck, undealt board, tokens, and internal objects stay on the server.
-Presence remains in lobby messages and is independent of gameplay revision.
+Gameplay snapshots include the following public lifecycle fields. The
+existing `status` still describes admission. `lifecycle` describes the
+current match or hand context.
+
+| Fields | Meaning |
+| --- | --- |
+| `lifecycle` | `waiting`, `awaiting_players`, `active`, `paused`, `between_hands`, or `complete`. |
+| `lifecycle_revision`, `presence` | Monotonic lifecycle version and gameplay presence booleans for A and B. Terminal presence is frozen at the outcome. |
+| `turn_clock` | `status` is `running`, `paused`, or `inactive`. `acting_player` and `remaining_ms` are null when inactive. |
+| `disconnect_grace` | A and B each map to null or an object with `remaining_ms`. |
+| `match_result` | Null or `{"reason":"forfeit","winner":"B"}`, for example. The other reasons are `both_absent`, `engine`, and `engine_error` for a controlled invariant failure. |
+| `last_automatic_action` | Null or `source: "server"`, `reason: "turn_timeout"`, `hand_id`, `seat`, and `action`. Cleared at the next hand. |
+
+The existing `revision` advances only for committed engine transitions,
+including automatic actions. `lifecycle_revision` advances for gameplay
+presence changes, including pause and resume, and for match termination.
+One logical lifecycle transition advances it once. Countdown samples
+can differ at the same revision pair. A client displays running time
+using elapsed local time since receiving the latest snapshot. A paused
+time is constant. Only the server decides expiration. Legal actions
+and Ready eligibility are suppressed while inactive for lack of
+presence, paused, or terminal.
 
 ### Commit, replay, and delivery
 
@@ -192,16 +213,21 @@ increments revision once. Revisions do not reset between hands.
 
 The replay key is `(seat, hand_id, action_id)`. Compare the full validated
 command, including its type, action and expected revision. An identical
-retry returns the exact stored acknowledgment, including its older
-`outcome_revision`, before checking the current revision. It sends no
-new snapshot and never calls the engine. Store structurally valid
-current-hand results, including rejected commands. Malformed frames,
-pre-deal requests, unseen commands for the wrong hand, replay conflicts,
-and over-capacity requests are outside that cache. Retain the current
-and previous hands with a cap of 256 distinct IDs per seat per hand
-(1,024 records maximum across both seats and both hands). Reject a new
-ID at the cap without evicting previous IDs. A seat that exhausts its
-budget cannot submit a new command in that hand.
+retry returns the exact stored acknowledgment after deadline reconciliation
+and before command revision checks. Accepted records survive through the
+previous hand. Rejected records use a separate per-seat FIFO of 256 per hand
+through the same two-hand window. A rejected ID outside that FIFO can be
+submitted as new and is validated against the current hand and revision.
+Conflicting reuse of any retained identifier is rejected. Wrong-hand
+requests with no retained record never reach the engine. Malformed frames,
+pre-deal requests, and replay conflicts do not enter either ledger.
+
+Accepted memory is bounded by the engine. At most four actions resolve
+preflop after the blinds. At most five resolve each other street, including
+an optional opening check, a bet, two raises, and a call. A fold ends
+the hand early. Two Ready transitions give at most 21 accepted mutations
+per hand across both seats. Automatic actions take an engine turn without
+entering a client ledger.
 
 Each persistent connection has its own FIFO queue of 32 frames and one
 writer. A stalled client cannot block a room commit or another writer.
@@ -212,15 +238,51 @@ Queue contents stay with the old connection during replacement.
 Structured cancellation ends the reader and writer together. This is
 one in-memory app on one worker.
 
-### Future clocks and recovery
+### Timing and recovery
 
-Pending joint approval, use server monotonic time and an exclusive
-30-second turn deadline. On expiry, check when legal and otherwise fold.
-Each absent seat has an independent exclusive 20-second deadline.
-Pause the turn and preserve its remaining time while either seat is
-absent. On timely return of both seats, resume that remaining time. At
-the earliest applicable expiry, close without a winner if both remain
-absent. If only one is absent, that seat forfeits. Route authoritative
-callbacks through the same room boundary and invalidate callbacks tied
-to an old hand or connection. Day 2 implements socket replacement
-without game clocks, disconnect deadlines, or forfeits.
+The default turn is 30 seconds and each absent seat has an independent
+20-second grace period. Durations and clock are injectable only at
+app construction. A hand can be dealt before both gameplay sockets
+authenticate. The first countdown starts when both are present.
+A never-connected seat has no grace deadline before activation.
+After activation, absence also matters between hands awaiting Ready.
+
+Only current gameplay sockets count. Gameplay-to-gameplay replacement
+transfers ownership without creating an absence. A lobby-only replacement
+removes gameplay presence. A further lobby replacement preserves any
+existing grace deadline. Status-only sockets never enter the registry.
+A failed authentication leaves presence untouched. Writer failure and
+overflow revoke gameplay presence. Old cleanup has no authority over
+a replacement connection.
+
+The coordinator samples monotonic nanoseconds after acquiring the room
+lock. At or after a deadline it reconciles expiry before processing input
+or a connection change. At turn expiry it queries engine legality, then
+checks if legal or folds otherwise. A newly active turn gets its full
+duration from the transition time. Delayed scheduler wakeups cannot
+admit a late command. An expiry broadcast can precede an acknowledgment
+when input itself triggers reconciliation.
+
+Disconnect saves the exact remaining turn duration. The other seat's grace
+deadline is independent. Both timely returns are necessary to resume.
+The earliest remaining grace deadline governs. If both seats are still
+absent at expiry the match closes without a winner. With one absent seat,
+that seat forfeits and the present seat wins. Authenticated late observers
+can read a terminal snapshot with their own cards. Gameplay cannot resume.
+
+A transport terminal outcome preserves the last engine state and any
+outstanding pot. It creates neither a new hand result nor a payout.
+Hand result, match result, and phase stay distinct. Transport terminal
+messages withhold the opponent's cards. There is no room reset endpoint,
+so a new match after terminal completion requires restarting the server.
+
+One lifespan-owned scheduler waits for the earliest deadline or a
+state-change event and is canceled on shutdown. Wakeups carry no
+cached acting seat or executable callback. Each one rechecks the current
+deadline under the room lock, so stale wakeups cannot act on earlier hands
+or paused turns. Nanoseconds are internal. Wire time is ceiling-rounded
+remaining milliseconds, without process-local timestamps. Timing tests
+use a manual clock and the live smoke fixture uses shorter durations.
+
+The configurable poker rules are preserved and the final joint rules and
+forfeit-specification approval remains pending.

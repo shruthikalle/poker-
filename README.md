@@ -2,7 +2,7 @@
 
 A browser-based, two-player Texas Hold'em game using **virtual chips only**. One player creates a private room and shares its code; the other joins from a second browser. The server owns the deck, rules, timers, and game state. Each browser receives only the information that player is allowed to see.
 
-The integrated development app runs the existing configurable-bet-unit engine through showdown and subsequent hands. Both HTTP admission contracts and both WebSocket lobby formats use one room per running app. Player B's admission initializes the first hand. Day 2 adds a headless gameplay socket with personalized views, action and Ready commands, revisions, and replay protection. Timers, reconnect deadlines, and the browser remain planned.
+The integrated development app runs the existing configurable-bet-unit engine through showdown and subsequent hands. Both HTTP admission contracts and both WebSocket lobby formats use one room per running app. Player B's admission initializes the first hand. Day 2 adds a headless gameplay socket with personalized views, action and Ready commands, revisions, and replay protection. Day 3 adds server-authoritative turn timers, pause/resume, reconnect grace, and distinct match-forfeit and no-winner outcomes. The browser remains planned.
 
 Team: Srishruthik Alle and Deepthi Morusupalli, CS 378 Agentic Software Engineering.
 
@@ -70,11 +70,18 @@ The boundary between the parts is a server-side game API: the real-time layer su
 
 The engine API is `new_game(bet_unit=10, deck=None)`, `legal_actions(state, player)`, and `apply_action(state, player, action, *, deck=None)`. `apply_action` returns an `ActionResult` with `accepted`, `state`, and `error`. On rejection, `state` is the original unchanged object. On success, it is a new immutable state. The optional `deck` argument is only for the **second** Ready action and allows a prepared next hand in tests; normal play omits it.
 
-At showdown, the engine evaluates and awards the pot immediately, then sets `phase="showdown"`. This is the only completed-hand phase in which a client may see both hole-card pairs. A fold sets `phase="finished"` and must not reveal the opponent's cards. `winner=None` in a showdown means a tie; `match_winner` is set when a player cannot fund the next big blind. The WebSocket layer authenticates players, applies engine commands under room synchronization, deduplicates retries, and sends filtered snapshots. Clocks and timed reconnects remain planned. **Never serialize `GameState` directly to a client:** it includes both private hands and the remaining deck.
+At showdown, the engine evaluates and awards the pot immediately, then sets `phase="showdown"`. This is the only completed-hand phase in which a client may see both hole-card pairs. A fold sets `phase="finished"` and must not reveal the opponent's cards. `winner=None` in a showdown means a tie; `match_winner` is set when a player cannot fund the next big blind. The WebSocket layer authenticates players, applies engine commands under room synchronization, deduplicates retries, and sends filtered snapshots. The server owns a 30-second turn clock and a 20-second grace period per absent seat. Exact expiry wins over input processed at the deadline. **Never serialize `GameState` directly to a client:** it includes both private hands and the remaining deck.
 
 ## Test cases and expected results
 
-These are **older-rule** expected values, not tests for the target PDF rules. Engine tests cover the numeric and rule portions of **G1-G12, R1-R3, R5, R10, and C1-C3** under the existing implementation. Update these fixtures and tests as the engine changes. Admission tests cover R5 and R6. Gameplay tests exercise R4 and R10 with the engine rules, including stable replay acknowledgments and Ready across hands. R9 covers waiting state and action rejection, with the fake-clock portion pending. The R8 replacement and concurrent command checks enforce the active-socket and unchanged-chip invariants. Full R7 timed reconnect and R8's complete prescribed scenario remain open. C4 and C5 have gameplay and fold privacy coverage, with timers, reconnect recovery, and forfeits pending. C6 covers the revealed 3/4/5 board progression, with timed recovery still pending. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store actual fixture files and runnable tests with the code.
+These are **older-rule** expected values, not tests for the target PDF rules. Engine tests cover the numeric and rule portions of **G1-G12, R1-R3, R5, R10, and C1-C3** under the existing implementation. Update these fixtures and tests as the engine changes. Admission tests cover R5 and R6. Gameplay tests exercise R4 and R10,
+and R9 waiting-state timing and command protection. The fake-clock
+checks exercise T1–T8. R7 covers invalid tokens, same-seat return,
+and expired gameplay authority. Seat identity is derived from possession
+of the token, so token theft remains outside this contract. R8 has
+current-socket and competing-command checks. C4–C6 have gameplay,
+settlement, and recovery privacy checks, including terminal forfeits
+and flop/turn/river disclosure. The browser demonstration remains open. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store actual fixture files and runnable tests with the code.
 
 ### Common fixture
 
@@ -156,7 +163,7 @@ The project began as a new codebase. The combined lockfile includes the followin
 - Persistent socket tasks use [AnyIO 4.16.0](https://pypi.org/project/anyio/4.16.0/), now a direct dependency at the previously locked version.
 - The rules reference uses standard poker terminology. [WSOP rules](https://www.wsop.com/poker-games/texas-holdem/rules/)
 
-The original engine and tests were built with Codex under Srishruthik's direction. Deepthi's Day 1 work added the configurable room API, private session tokens, and first-hand initialization. Srishruthik's later server work added the lobby API, connection tracking, and socket replacement. Deepthi's Day 2 work extends that persistent socket with queued gameplay delivery, the coordinator, private views, and headless integration tests. Actual partner and agent contributions will be identified in the final slides and repository history.
+The original engine and tests were built with Codex under Srishruthik's direction. Deepthi's Day 1 work added the configurable room API, private session tokens, and first-hand initialization. Srishruthik's later server work added the lobby API, connection tracking, and socket replacement. Deepthi's Day 2 work extends that persistent socket with queued gameplay delivery, the coordinator, private views, and headless integration tests. Day 3 extends that same coordinator with timers, gameplay presence, and recovery. Actual partner and agent contributions will be identified in the final slides and repository history.
 
 ## Setup and demo
 
@@ -198,6 +205,22 @@ uv run --locked python evidence/deepthi-day-2/smoke.py --scenario fold
 uv run --locked python evidence/deepthi-day-2/smoke.py --scenario tie
 ```
 
+### Day 3 recovery demonstration
+
+Use a fresh process for each scenario. The production launch above uses
+30-second turns and 20-second grace periods. The internal `launch:timeout`
+factory uses 400 ms turns. The internal `launch:recovery` factory uses
+two-second turns and a one-second grace period.
+
+```sh
+uv run --locked uvicorn launch:timeout --factory --app-dir evidence/deepthi-day-3 --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+uv run --locked python evidence/deepthi-day-3/smoke.py --scenario timeout-fold
+```
+
+Start the server and probe in separate terminals. Restart the server and
+choose `timeout-check` for automatic check. Use `launch:recovery` with
+`reconnect`, `forfeit`, or `both-absent`.
+
 For manual room admission, start with an empty server and replace `ROOM_CODE` with the code from A's response. Share only the room code with B.
 
 ```sh
@@ -211,6 +234,7 @@ curl -sS -H 'Content-Type: application/json' -d '{"room_code":"ROOM_CODE"}' http
 - [poker/rooms.py](poker/rooms.py) owns room state, admission, credentials, and initial hand creation.
 - [poker/server.py](poker/server.py) serves both HTTP and WebSocket contracts. [server/connections.py](server/connections.py) tracks lobby sockets by seat. [server/sessions.py](server/sessions.py) maps the older lobby API to the same room.
 - [docs/protocol.md](docs/protocol.md) describes both current contracts and the gameplay decisions still open.
+- [Day 3 evidence and reproduction steps](evidence/deepthi-day-3/notes.md) cover timer boundaries, recovery, and the replay fix.
 - [Day 2 evidence and reproduction steps](evidence/deepthi-day-2/notes.md) cover gameplay, privacy, and coordination.
 - [Day 1 baseline](evidence/deepthi-day-1/baseline.txt) and [Day 1 results](evidence/deepthi-day-1/test-results.txt) preserve the original checks. The [integration notes](evidence/integration-day1-day3/notes.md) and [integration results](evidence/integration-day1-day3/test-results.txt) record the combined validation and joint decisions.
 
@@ -219,7 +243,8 @@ curl -sS -H 'Content-Type: application/json' -d '{"room_code":"ROOM_CODE"}' http
 The game supports heads-up play only, one active room per server process, fixed-size bets, and no all-ins or side pots. A player who cannot afford a call must fold. These are explicit scope choices; we will record any later change and why we made it.
 
 
-Day 2 supports a headless complete hand and Ready over one in-memory server
-process. The browser interface, authoritative timers, timed reconnect
-recovery, and forfeits remain future work. Replay outcomes expire after
-the previous hand and are lost when the process exits.
+Day 3 supports headless gameplay and timed recovery over one in-memory
+server process. The browser, persistence, and a room reset endpoint remain
+future work. Replay outcomes expire after the previous hand. Rejected
+outcomes also expire when their FIFO is full. Accepted commands remain
+protected while their hand is retained.
