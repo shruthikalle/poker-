@@ -1,0 +1,28 @@
+Starting commit: 34aa2414ff9bc3841e5441cb58ea806d96008313
+Starting branch: main (clean working tree)
+Environment: CPython 3.13.9, uv 0.12.3, macOS arm64
+The first sync was blocked by sandbox cache permissions. With a writable
+UV_CACHE_DIR, it was blocked by sandbox DNS. The authorized retry used that
+cache with network access.
+
+$ uv sync
+Resolved 1 package in 3ms
+   Building heads-up-live-poker @ file:///Users/deepthi/poker-
+      Built heads-up-live-poker @ file:///Users/deepthi/poker-
+Prepared 1 package in 565ms
+Installed 1 package in 0.93ms
+ + heads-up-live-poker==0.1.0 (from file:///Users/deepthi/poker-)
+
+$ uv run python -m unittest discover -s tests -v
+test_g1_initial_legal_actions_and_blinds (test_engine.FirstHandTests.test_g1_initial_legal_actions_and_blinds) ... ok
+test_g2_call_then_check_reveals_flop (test_engine.FirstHandTests.test_g2_call_then_check_reveals_flop) ... ok
+test_g5_fold_awards_the_pot (test_engine.FirstHandTests.test_g5_fold_awards_the_pot) ... ok
+test_g7_r3_two_raises_then_third_is_rejected (test_engine.FirstHandTests.test_g7_r3_two_raises_then_third_is_rejected) ... ok
+test_r1_out_of_turn_action_leaves_every_field_unchanged (test_engine.FirstHandTests.test_r1_out_of_turn_action_leaves_every_field_unchanged) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.000s
+
+OK
+
+The five methods cover six README cases: G1, G2, G5, G7, R1, and R3.
