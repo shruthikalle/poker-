@@ -3,15 +3,15 @@ Starting branch: main (clean working tree)
 Environment: CPython 3.13.9, uv 0.12.3, macOS arm64
 The first sync was blocked by sandbox cache permissions. With a writable
 UV_CACHE_DIR, it was blocked by sandbox DNS. The authorized retry used that
-cache with network access.
+cache with network access. The checkout path is abbreviated below.
 
 $ uv sync
 Resolved 1 package in 3ms
-   Building heads-up-live-poker @ file:///Users/deepthi/poker-
-      Built heads-up-live-poker @ file:///Users/deepthi/poker-
+   Building heads-up-live-poker @ file://<checkout>
+      Built heads-up-live-poker @ file://<checkout>
 Prepared 1 package in 565ms
 Installed 1 package in 0.93ms
- + heads-up-live-poker==0.1.0 (from file:///Users/deepthi/poker-)
+ + heads-up-live-poker==0.1.0 (from file://<checkout>)
 
 $ uv run python -m unittest discover -s tests -v
 test_g1_initial_legal_actions_and_blinds (test_engine.FirstHandTests.test_g1_initial_legal_actions_and_blinds) ... ok

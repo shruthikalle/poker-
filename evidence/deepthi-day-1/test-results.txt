@@ -1,0 +1,96 @@
+Day 1 verification
+Environment: CPython 3.13.9, uv 0.12.3, macOS arm64
+Machine-specific paths are abbreviated in the captured output.
+
+$ export UV_PROJECT_ENVIRONMENT="$(mktemp -d)/.venv"
+$ uv sync --locked --offline
+Using CPython 3.13.9 interpreter at: /opt/anaconda3/bin/python3
+Creating virtual environment at: <temporary directory>/.venv
+Resolved 20 packages in 1ms
+Installed 19 packages in 15ms
+ + annotated-doc==0.0.7
+ + annotated-types==0.8.0
+ + anyio==4.16.0
+ + click==8.5.1
+ + fastapi==0.165.0
+ + h11==0.16.0
+ + heads-up-live-poker==0.1.0 (from file://<checkout>)
+ + httpcore2==2.16.2
+ + httpx2==2.16.2
+ + idna==3.20
+ + opentelemetry-api==1.45.2
+ + pydantic==2.14.4
+ + pydantic-core==2.50.5
+ + starlette==1.10.0
+ + truststore==0.10.5
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.5
+ + uvicorn==0.54.0
+ + websockets==17.4
+
+$ uv run --locked python -m unittest discover -s tests -v
+test_g1_initial_legal_actions_and_blinds (test_engine.FirstHandTests.test_g1_initial_legal_actions_and_blinds) ... ok
+test_g2_call_then_check_reveals_flop (test_engine.FirstHandTests.test_g2_call_then_check_reveals_flop) ... ok
+test_g5_fold_awards_the_pot (test_engine.FirstHandTests.test_g5_fold_awards_the_pot) ... ok
+test_g7_r3_two_raises_then_third_is_rejected (test_engine.FirstHandTests.test_g7_r3_two_raises_then_third_is_rejected) ... ok
+test_r1_out_of_turn_action_leaves_every_field_unchanged (test_engine.FirstHandTests.test_r1_out_of_turn_action_leaves_every_field_unchanged) ... ok
+test_accepts_every_even_bet_unit_inclusive (test_rooms.RoomCreationTests.test_accepts_every_even_bet_unit_inclusive) ... ok
+test_creation_assigns_only_a_and_does_not_deal (test_rooms.RoomCreationTests.test_creation_assigns_only_a_and_does_not_deal) ... ok
+test_default_generators_produce_url_safe_credentials (test_rooms.RoomCreationTests.test_default_generators_produce_url_safe_credentials) ... ok
+test_rejects_invalid_bet_units_without_mutating_state (test_rooms.RoomCreationTests.test_rejects_invalid_bet_units_without_mutating_state) ... ok
+test_rejects_second_room_and_preserves_original_session (test_rooms.RoomCreationTests.test_rejects_second_room_and_preserves_original_session) ... ok
+test_competing_creations_allocate_only_one_host (test_rooms.RoomJoiningTests.test_competing_creations_allocate_only_one_host) ... ok
+test_competing_joins_allocate_only_one_guest_and_preserve_host (test_rooms.RoomJoiningTests.test_competing_joins_allocate_only_one_guest_and_preserve_host) ... ok
+test_join_assigns_b_and_initializes_one_hand_with_host_unit (test_rooms.RoomJoiningTests.test_join_assigns_b_and_initializes_one_hand_with_host_unit) ... ok
+test_join_retries_a_duplicate_token (test_rooms.RoomJoiningTests.test_join_retries_a_duplicate_token) ... ok
+test_repeated_token_collision_leaves_room_waiting (test_rooms.RoomJoiningTests.test_repeated_token_collision_leaves_room_waiting) ... ok
+test_room_code_cannot_reclaim_a_seat_or_change_the_bet_unit (test_rooms.RoomJoiningTests.test_room_code_cannot_reclaim_a_seat_or_change_the_bet_unit) ... ok
+test_wrong_room_code_leaves_room_and_seats_unchanged (test_rooms.RoomJoiningTests.test_wrong_room_code_leaves_room_and_seats_unchanged) ... ok
+test_health_returns_only_running_status (test_server.HealthTests.test_health_returns_only_running_status) ... ok
+test_application_instances_have_independent_room_state (test_server.RoomHTTPTests.test_application_instances_have_independent_room_state) ... ok
+test_create_and_join_return_only_callers_admission (test_server.RoomHTTPTests.test_create_and_join_return_only_callers_admission) ... ok
+test_full_room_and_second_creation_return_conflicts_without_mutation (test_server.RoomHTTPTests.test_full_room_and_second_creation_return_conflicts_without_mutation) ... ok
+test_invalid_creation_requests_leave_room_empty (test_server.RoomHTTPTests.test_invalid_creation_requests_leave_room_empty) ... ok
+test_malformed_json_returns_fixed_error_without_mutation (test_server.RoomHTTPTests.test_malformed_json_returns_fixed_error_without_mutation) ... ok
+test_wrong_code_and_seat_claim_leave_waiting_room_unchanged (test_server.RoomHTTPTests.test_wrong_code_and_seat_claim_leave_waiting_room_unchanged) ... ok
+test_each_token_maps_to_its_original_seat_and_status_contains_no_cards (test_server.RoomWebSocketTests.test_each_token_maps_to_its_original_seat_and_status_contains_no_cards) ... ok
+test_gameplay_frames_cannot_change_state (test_server.RoomWebSocketTests.test_gameplay_frames_cannot_change_state) ... ok
+test_host_receives_only_waiting_status_before_join (test_server.RoomWebSocketTests.test_host_receives_only_waiting_status_before_join) ... ok
+test_invalid_credentials_and_client_seat_claims_close_without_payload (test_server.RoomWebSocketTests.test_invalid_credentials_and_client_seat_claims_close_without_payload) ... ok
+test_invalid_text_and_binary_authentication_close_without_payload (test_server.RoomWebSocketTests.test_invalid_text_and_binary_authentication_close_without_payload) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 0.121s
+
+OK
+
+Live smoke check against be518b9 (before HTTP endpoints)
+$ uv run --locked python evidence/deepthi-day-1/smoke.py
+GET /health -> 200
+POST /api/rooms -> 404
+Traceback (most recent call last):
+  File "<checkout>/evidence/deepthi-day-1/smoke.py", line 102, in <module>
+    main()
+    ~~~~^^
+  File "<checkout>/evidence/deepthi-day-1/smoke.py", line 65, in main
+    check_status(invalid, 422)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "<checkout>/evidence/deepthi-day-1/smoke.py", line 14, in check_status
+    assert actual == expected, f"expected HTTP {expected}, received {actual}"
+           ^^^^^^^^^^^^^^^^^^
+AssertionError: expected HTTP 422, received 404
+Exit status: 1 (expected feature comparison)
+
+Live smoke check against faeb5b2 (Day 1 code)
+$ uv run --locked uvicorn poker.server:create_app --factory --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+$ uv run --locked python evidence/deepthi-day-1/smoke.py
+GET /health -> 200
+POST /api/rooms -> 422
+POST /api/rooms -> 201
+WebSocket A -> waiting (status fields only)
+POST /api/rooms/join -> 200
+WebSocket B -> ready (status fields only)
+POST /api/rooms/join -> 409
+WebSocket room code -> 1008 (no application payload)
+Day 1 smoke checks passed
+Exit status: 0

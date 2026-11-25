@@ -2,7 +2,7 @@
 
 A browser-based, two-player Texas Hold'em game using **virtual chips only**. One player creates a private room and shares its code; the other joins from a second browser. The server owns the deck, rules, timers, and game state. Each browser receives only the information that player is allowed to see.
 
-This README is the project plan and test specification. The first Python game-engine milestone is runnable and tested; the browser, WebSocket server, timers, reconnects, and showdown payout are still to be built.
+This README is the project plan and test specification. The initial Python engine and Day 1 multiplayer foundation are runnable and tested. The foundation provides HTTP room admission, first-hand initialization when B joins, and authenticated WebSocket room status. Browser play, gameplay messages, timers, reconnect recovery, and showdown payout remain planned.
 
 Team: Srishruthik Alle and Deepthi Morusupalli. Contact: shruthik.alle@gmail.com; Deepthi's contact email will be added after she provides it.
 
@@ -60,11 +60,11 @@ Srishruthik and Deepthi agreed to this split. The repository's commit history an
 
 The boundary between the parts is a server-side game API: the real-time layer submits a player identity and requested action; the game engine returns the new state or a rejection. Only the real-time layer converts state into player-specific messages. Neither browser is trusted to calculate the pot, choose the next turn, or decide the winner.
 
-The current engine API is `new_game(bet_unit=10, deck=None)`, `legal_actions(state, player)`, and `apply_action(state, player, action)`. `apply_action` returns an `ActionResult` with `accepted`, `state`, and `error`. On rejection, `state` is the original unchanged object. On success, it is a new immutable state. The WebSocket layer will authenticate players, serialize requests, deduplicate action IDs, and send filtered views; those parts are not implemented yet.
+The current engine API is `new_game(bet_unit=10, deck=None)`, `legal_actions(state, player)`, and `apply_action(state, player, action)`. `apply_action` returns an `ActionResult` with `accepted`, `state`, and `error`. On rejection, `state` is the original unchanged object. On success, it is a new immutable state. The real-time layer uses `new_game` when B joins. WebSocket authentication binds a token to a seat and sends a filtered room-status message. Gameplay requests, action deduplication, and player-specific card views remain planned. [Multiplayer protocol and integration contract](docs/protocol.md)
 
 ## Test cases and expected results
 
-These are specifications to turn into automated tests. **G1, G2, G5, G7, R1, and R3 are implemented and passing; the other numbered cases are planned, not passing results.** Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store the actual fixture files and runnable tests with the code. Expected pot and stack values below are calculated from the stated rules, independently of the implementation or Treys.
+These are specifications to turn into automated tests. **G1, G2, G5, G7, R1, and R3 pass in the engine suite. R5 (bet-unit validation and immutability) and R6 (room and seat protection) pass in the Day 1 suite.** R9 has partial coverage for the waiting room and absence of a deal. Its scheduled clock and gameplay-action scenarios remain planned, as do full R7 and C4 coverage and the other numbered cases. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store the actual fixture files and runnable tests with the code. Expected pot and stack values below are calculated from the stated rules, independently of the implementation or Treys.
 
 ### Common fixture
 
@@ -136,26 +136,63 @@ The highest-value automated checks are G1-G8, R1-R4, T1-T6, and C4-C6: they exer
 
 ## Implementation and attribution
 
-The project starts without an existing codebase. We plan to build the game logic, room protocol, privacy filtering, reconnect behavior, and browser interface ourselves. Planned external dependencies are:
+The project began as a new codebase. We plan to build the game logic, room protocol, privacy filtering, reconnect behavior, and browser interface ourselves. These direct dependencies are locked for Day 1.
 
-- [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) for server-to-browser communication.
+- HTTP and WebSocket routing with [FastAPI 0.165.0](https://pypi.org/project/fastapi/0.165.0/).
+- Strict transport schemas with [Pydantic 2.14.4](https://pypi.org/project/pydantic/2.14.4/).
+- The ASGI runtime and WebSocket implementation use [Uvicorn 0.54.0](https://pypi.org/project/uvicorn/0.54.0/) and [websockets 17.4](https://pypi.org/project/websockets/17.4/).
+- The development dependency for TestClient and the live smoke client is [HTTPX2 2.16.2](https://pypi.org/project/httpx2/2.16.2/).
+
+The following references apply to the game rules and planned showdown work:
+
 - [Treys 0.1.8](https://pypi.org/project/treys/0.1.8/) for card representation and hand evaluation.
 - [WSOP rules](https://www.wsop.com/poker-games/texas-holdem/rules/) as a reference for hand and action terminology; our supported betting rules are specified above.
 
-We will pin actual dependency versions when implementation starts and document any additional reused code or assets with links. Course homework material will not be used. Agent-assisted code and each partner's contributions will be identified in the final slides and repository history.
+`uv.lock` records the full dependency resolution, including transitive versions. Additional reused code or assets will be documented with links. Course homework material will not be used. Agent-assisted code and each partner's contributions will be identified in the final slides and repository history.
 
 ## Setup and demo
 
-The first engine milestone was tested with Python **3.13.5** and uv **0.12.3**. The `.python-version` file selects Python 3.13, and `uv.lock` records the project environment. From a fresh clone:
+The first engine milestone was tested with Python **3.13.5** and uv **0.12.3**. Day 1 was verified with Python **3.13.9** and uv **0.12.3**. The `.python-version` file selects Python 3.13, and `uv.lock` records the project environment. From a fresh clone:
 
 ```sh
 cd /path/to/your/clone
-uv sync
-uv run python -m unittest discover -s tests -v
+uv sync --locked
+uv run --locked python -m unittest discover -s tests -v
 ```
 
-No credentials or configuration are required for these tests. There is no browser demo command yet. Before submission, this section must include exact launch commands and clean-start two-browser demo steps.
+The local tests and demo run without external accounts or credentials. Start one server in the first terminal.
+
+```sh
+uv run --locked uvicorn poker.server:create_app --factory --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+```
+
+In a second terminal, run the smoke check against an empty server. It verifies
+health, room admission, rejection of a third join, and WebSocket status for
+both seats. Restart the server to clear the room before running it again.
+
+```sh
+uv run --locked python evidence/deepthi-day-1/smoke.py
+```
+
+For manual HTTP requests, start with an empty server and replace `ROOM_CODE`
+with the code from A's response. Share only the room code with B.
+
+```sh
+curl -sS http://127.0.0.1:8000/health
+curl -sS -H 'Content-Type: application/json' -d '{"bet_unit":10}' http://127.0.0.1:8000/api/rooms
+curl -sS -H 'Content-Type: application/json' -d '{"room_code":"ROOM_CODE"}' http://127.0.0.1:8000/api/rooms/join
+```
+
+### Day 1 files and evidence
+
+- [poker/rooms.py](poker/rooms.py) owns in-memory admission, seat credentials, and the atomic first-hand initialization.
+- [poker/server.py](poker/server.py) exposes health, admission, and WebSocket authentication.
+- [tests/test_rooms.py](tests/test_rooms.py) verifies room rules and competing requests. [tests/test_server.py](tests/test_server.py) verifies HTTP and WebSocket behavior.
+- [docs/protocol.md](docs/protocol.md) describes the current wire format, privacy allowlists, and engine handoff.
+- [Baseline results](evidence/deepthi-day-1/baseline.txt), [final results](evidence/deepthi-day-1/test-results.txt), and [engineering notes](evidence/deepthi-day-1/notes.md) preserve the measured tests and reproduction steps.
 
 ## Known limits of the first version
 
 The game supports heads-up play only, one active room per server process, fixed-size bets, and no all-ins or side pots. A player who cannot afford a call must fold. These are explicit scope choices; we will record any later change and why we made it.
+
+Day 1 runs on loopback with a single worker. The room and tokens live in memory until the process exits. The bet unit is fixed at creation. WebSockets send one room-status snapshot at authentication. Gameplay, live updates, connection replacement, and the browser demonstration remain future milestones.

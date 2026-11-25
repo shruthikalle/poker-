@@ -45,15 +45,15 @@ Admission fields are `room_code`, `seat`, `session_token`, `bet_unit`,
 and `status`. Successful admission responses carry `Cache-Control: no-store`.
 Status is `waiting` or `ready`, where `ready` means both seats are allocated
 and the first hand has been initialized. The future Ready flags apply after
-a hand ends. Room requests accept only their documented
-fields. Errors use a fixed `detail` string with 422 for invalid input, 404
-for an unknown code, or 409 for an existing room or full room.
+a hand ends. Room requests accept only their documented fields. Errors use
+a fixed `detail` string with 422 for invalid input, 404 for an unknown code,
+or 409 for an existing room or full room.
 
 The WebSocket endpoint is `/ws`. Within five seconds of opening the socket,
 send `{"type":"authenticate","session_token":"…"}` as the first JSON text
-message. Send the token only in that frame. Invalid authentication closes with code 1008 and
-no application payload. A successful handshake sends exactly the fields
-`type: "room_status"`, `seat`, `bet_unit`, and `status` for the
+message. Send the token only in that frame. Invalid authentication closes
+with code 1008 and no application payload. A successful handshake sends
+exactly `type: "room_status"`, `seat`, `bet_unit`, and `status` for the
 authenticated seat. The socket stays open after its one-time snapshot. Any
 additional application message closes it with code 1008. Connection presence,
 exclusive access per seat, and gameplay updates are future work.
