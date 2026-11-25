@@ -1,9 +1,10 @@
 """In-memory room admission independent of the network transport."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from secrets import compare_digest, token_urlsafe
-from threading import Lock
+from threading import RLock
 from typing import Literal
 
 from .engine import GameState, Player, new_game
@@ -50,6 +51,7 @@ class Room:
     seat_a_token: str = field(repr=False)
     seat_b_token: str | None = field(default=None, repr=False)
     hand: GameState | None = field(default=None, repr=False)
+    revision: int = 0
 
     @property
     def status(self) -> RoomStatus:
@@ -64,10 +66,12 @@ class RoomManager:
         *,
         code_factory: Callable[[], str] | None = None,
         token_factory: Callable[[], str] | None = None,
+        deck: tuple[str, ...] | None = None,
     ) -> None:
         self._code_factory = code_factory or (lambda: token_urlsafe(9))
         self._token_factory = token_factory or (lambda: token_urlsafe(32))
-        self._lock = Lock()
+        self._deck = deck
+        self._lock = RLock()
         self._room: Room | None = None
 
     def create(self, bet_unit: object) -> Admission:
@@ -103,7 +107,10 @@ class RoomManager:
                 raise RuntimeError("could not generate a unique session token")
 
             joined = replace(
-                room, seat_b_token=token, hand=new_game(bet_unit=room.bet_unit)
+                room,
+                seat_b_token=token,
+                hand=new_game(bet_unit=room.bet_unit, deck=self._deck),
+                revision=1,
             )
             self._room = joined
             return Admission(joined.code, "B", token, joined.bet_unit, joined.status)
@@ -122,6 +129,21 @@ class RoomManager:
             ):
                 return RoomView("B", room.bet_unit, room.status)
             return None
+
+    @contextmanager
+    def synchronized(self) -> Iterator[None]:
+        """Serialize compound room operations without awaiting under the lock."""
+        with self._lock:
+            yield
+
+    def commit_hand(self, current: Room, hand: GameState) -> Room:
+        """Commit an engine transition inside the same room transaction."""
+        with self._lock:
+            if current is not self._room or current.hand is None:
+                raise RuntimeError("room transition requires the current dealt hand")
+            if hand != current.hand:
+                self._room = replace(current, hand=hand, revision=current.revision + 1)
+            return self._room
 
     def snapshot(self) -> Room | None:
         """Return the immutable server-side state for inspection."""
