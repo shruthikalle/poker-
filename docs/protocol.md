@@ -36,8 +36,7 @@ deck only when the second Ready action starts a hand. The engine owns
 `ready_players`, the stack-preserving deal, button rotation, and
 `hand_number`. Outside the active betting phases, `legal_actions` may
 return `ready` even when there is no actor. Engine errors remain plain
-strings. The current transport calls `new_game` and leaves action handling
-for gameplay integration.
+strings. The coordinator uses `apply_action` for betting and Ready.
 
 ## Implemented transport
 
@@ -90,105 +89,138 @@ messages select their reply format. The legacy `server.main:app` launch
 also keeps the lobby error response for ambiguous malformed first
 messages. The `poker.server:create_app` launch closes those without a payload.
 
-## Planned WebSocket messages
+## Day 2 gameplay protocol
 
-All commands after authentication use the server-bound seat. The client never
-supplies a seat or a chip amount for an action. Extend the outbound allowlist
-only through explicit message schemas.
+Use the same persistent `/ws` endpoint. Send this first as a JSON text frame
+within five seconds of connecting.
 
-| Direction and type | Allowed fields in addition to `type` |
+```json
+{"type":"auth","token":"…","protocol":"gameplay.v1"}
+```
+
+The token binds the connection to one seat. A new authenticated connection
+replaces the old persistent connection for that seat. The old connection
+closes with 4000. Replacement participates in the same room transaction as
+commands. A command that commits first remains valid. A replacement that
+commits first revokes the old connection before its next command can apply.
+Old-socket teardown can remove only its own registration. A new connection
+always gets a current personalized snapshot. Existing two-field `auth`
+clients continue receiving lobby broadcasts. The one-time `authenticate`
+status path remains available.
+
+### Commands and acknowledgments
+
+```json
+{"type":"action","action_id":"c1","hand_id":1,"expected_revision":1,"action":"call"}
+{"type":"ready","action_id":"r1","hand_id":1,"expected_revision":9}
+{"type":"snapshot_request"}
+{"type":"ping"}
+```
+
+These are four separate frames. An action is `fold`, `check`, `call`,
+`bet`, or `raise`. The engine determines the amount and legality. Ready
+uses the same command identity, and its first accepted transition updates
+only one Ready flag. The other seat's accepted Ready deals the next hand.
+`action_id` is 1–64 ASCII letters, digits, underscores, or hyphens.
+`hand_id` is a positive integer and `expected_revision` a nonnegative
+integer, both at most 2^53−1. Booleans, additional fields, including a
+seat or an amount, missing fields, unsupported commands, non-object
+JSON, invalid JSON, and binary frames are invalid. The application-level
+message limit is 4,096 UTF-8 bytes. Uvicorn can close oversized frames at
+the transport layer before application validation.
+
+A well-formed command returns exactly these acknowledgment fields, with
+`error_code` set to null for acceptance.
+
+```json
+{"type":"action_ack","hand_id":1,"action_id":"c1","outcome_revision":2,"accepted":true,"error_code":null}
+```
+
+| Error code | Meaning |
 | --- | --- |
-| Client `action` | `action_id`, `hand_id`, `state_revision`, `action` (fold, check, call, bet, raise) |
-| Client `ready` | `hand_id` identifying the completed hand |
-| Server `snapshot` (initial, changed state, or reconnect) | `hand_id`, `state_revision`, `seat`, `status`, `bet_unit`, `button`, `phase`, `actor`, `stacks`, `contributions`, `pot`, `board`, `own_hole_cards`, `legal_actions`, `ready_seats`, `connected_seats`, `turn_remaining_ms` |
-| Server `action_ack` | `hand_id`, `action_id`, `outcome_revision`, `accepted`, `error_code` |
-| Server `error` | `code` drawn from a fixed catalog |
-| Server `timer` | `hand_id`, `state_revision`, `actor`, `turn_remaining_ms` |
-| Server `connection` | `hand_id`, `state_revision`, `connected_seats`, `paused` |
-| Server `ready_status` | `hand_id`, `state_revision`, `ready_seats` |
-| Server `result` | `hand_id`, `state_revision`, `reason`, `winner`, `stacks`, `awards`, optional `showdown_hole_cards` |
+| `INVALID_MESSAGE` | A malformed or unsupported frame. Gameplay replies with `{"type":"error","code":"INVALID_MESSAGE"}`. |
+| `UNAUTHORIZED` | Invalid token on persistent auth. An error precedes close 1008. |
+| `NOT_READY` | No hand exists, or an existing lobby-only client sent a gameplay command. |
+| `WRONG_HAND` | The command targets a different hand and has no eligible recorded outcome. |
+| `STALE_REVISION` | The supplied revision is older or newer than the room revision. |
+| `WRONG_TURN` | The authenticated seat cannot act on this betting turn. |
+| `ILLEGAL_ACTION` | The engine rejected the requested action or Ready transition. |
+| `HAND_COMPLETE` | The betting hand has settled. |
+| `MATCH_COMPLETE` | The engine ended the match. |
+| `REPLAY_CONFLICT` | The same replay key was used with different validated content. |
+| `REPLAY_CAPACITY` | The seat reached the per-hand command budget. |
 
-Serialize each recipient's snapshot separately. The board contains only
-revealed community cards. Showdown is the only result that may carry both
-hands. Fold and forfeit omit `showdown_hole_cards`. Deck data, unrevealed
-cards, credentials, internal diagnostics, and raw engine objects stay on
-the server.
+`WRONG_HAND` and `STALE_REVISION` on a new command send a current
+snapshot to the caller after the acknowledgment. A rejected command does
+not broadcast a transition. Ping yields `{"type":"pong"}`; a snapshot
+request sends the current personalized snapshot. These reads do not
+change the revision. Engine error text and raw exception details stay
+on the server.
 
-## Planned coordination
+### Personalized snapshots
 
-- Assign a new hand ID at each successful deal. Maintain a monotonically
-  increasing room revision for accepted authoritative transitions. Timer
-  display updates can reference the current revision without changing it.
-- Serialize requests and callbacks in the same room synchronization boundary.
-  Revalidate the bound connection and resolve due transitions at server
-  receipt. For a new action, check its hand, revision, match status, and
-  turn. Apply through the engine. Commit the returned state on acceptance.
-  Preserve authoritative game state on rejection and return an allowlisted
-  error code. Send personalized views after releasing the room lock.
-- Scope action IDs to the authenticated seat for the room lifetime. Match a
-  repeated ID against the original hand, submitted revision, and action
-  before checking current-turn or stale-revision conditions. Return its
-  recorded acknowledgment when identical and reject conflicting reuse.
-  Keep acknowledgments separate from snapshots. Clients render snapshots
-  in revision order and never use an old acknowledgment to replace state.
-- Use server monotonic time for a 30-second turn and a 20-second reconnect
-  grace period. At a deadline the due transition wins. On timeout, check if
-  legal or fold. Stale callbacks verify the hand, revision or timer identity
-  before mutating state. Disconnect pauses the current turn regardless of
-  who disconnected. A timely return with the seat's token gets the current
-  private snapshot and resumes the saved remaining time. One missing
-  player's grace expiration forfeits the match to the connected player.
-  When both are absent, close without a winner at grace expiration. Agree
-  on which grace deadline governs overlapping disconnects before implementing
-  the two-disconnect path.
-- After a hand ends, route authenticated Ready requests to the engine's
-  `ready` action. Increment revision on the first accepted Ready and on
-  the next deal. Use the replay cache for an identical retry. A fresh
-  duplicate request must leave state unchanged. The current engine tests
-  enforce the full-big-blind affordability rule. Resolve the target draft's
-  seat-specific affordability rule before migrating.
+The waiting snapshot has exactly `type: "snapshot"`, `status: "waiting"`,
+`seat`, `bet_unit`, and `revision: 0`. Admission of B atomically creates
+hand 1 at revision 1 and sends each gameplay socket its own view. A dealt
+snapshot sets `status: "ready"` and adds:
 
-## Joint decisions before gameplay
+| Fields | Meaning |
+| --- | --- |
+| `hand_id`, `phase`, `button`, `actor` | Engine hand number, current phase, dealer, and acting seat or null. |
+| `stacks`, `contributions`, `pot`, `raise_count`, `board` | Public betting values, per-seat chip maps, and revealed board only. |
+| `ready_seats` | Public per-seat Ready flags for the settled hand. |
+| `own_hole_cards`, `legal_actions`, `can_ready` | The recipient's cards, betting actions, and separate Ready eligibility. |
+| `result`, `match_winner` | Hand result or null, and terminal match winner or null. |
 
-Choose one gameplay schema from the two proposals. Srishruthik's draft
-uses `expected_revision` in action requests, public `revision` in state
-messages, and the replay key `(seat, hand_id, action_id)` with hand-scoped
-retention. The proposal above uses `state_revision` and a room-lifetime
-per-seat cache. Agree how long past acknowledgments remain available and
-keep them distinct from fresh snapshots. Both drafts use separate
-per-recipient allowlists and forbid raw engine state on the wire.
+Paid showdown has result kind `showdown_win` or `showdown_tie`, a winner
+seat or null for tie, and `showdown_hole_cards` for both players. A fold
+result is `{"kind":"fold_win","winner":"B"}` when B wins. Active hands
+have null result. A null engine winner means tie only at paid showdown.
+Opponent hole cards are withheld at every other phase, including folds.
+The deck, undealt board, tokens, and internal objects stay on the server.
+Presence remains in lobby messages and is independent of gameplay revision.
 
-Confirm whether transport should derive hand IDs from the engine's
-`hand_number`. Confirm stable error codes and how to represent the terminal
-match result and a paid tie. The newer rules draft also requires decisions
-about bet-unit configurability and the future division of implementation
-work. Neither lobby format carries cards or gameplay state today.
+### Commit, replay, and delivery
 
-## Day 2 implementation contract
+The room's synchronous lock protects admission, current-socket ownership,
+replay, the engine transition, revision, and enqueue order. WebSocket attach,
+detach, and queue operations run on the application's event loop. No
+network send or await occurs while the room lock is held. In the same
+transaction the coordinator enqueues the caller's acknowledgment, then
+both views built from the same committed room. A changed engine state
+increments revision once. Revisions do not reset between hands.
 
-The following contract guides the Day 2 implementation. The project keeps
-one FastAPI app factory, one room manager and one connection registry.
-`/api/rooms` and `/api/rooms/join` are the canonical admission paths.
-`/api/table`, `/api/join`, and `/api/session` remain lobby compatibility
-routes. Both existing WebSocket auth shapes remain supported. Gameplay uses
-`{"type":"auth","token":"…","protocol":"gameplay.v1"}` on the same persistent
-socket and binds the commands to the authenticated current connection.
-The explicit opt-in preserves exact lobby payloads for existing clients.
+The replay key is `(seat, hand_id, action_id)`. Compare the full validated
+command, including its type, action and expected revision. An identical
+retry returns the exact stored acknowledgment, including its older
+`outcome_revision`, before checking the current revision. It sends no
+new snapshot and never calls the engine. Store structurally valid
+current-hand results, including rejected commands. Malformed frames,
+pre-deal requests, unseen commands for the wrong hand, replay conflicts,
+and over-capacity requests are outside that cache. Retain the current
+and previous hands with a cap of 256 distinct IDs per seat per hand
+(1,024 records maximum across both seats and both hands). Reject a new
+ID at the cap without evicting previous IDs. A seat that exhausts its
+budget cannot submit a new command in that hand.
 
-A snapshot uses `type: "snapshot"`, `revision`, and the room-scoped engine
-`hand_id`. Waiting starts at revision 0 with no hand. The first deal is
-revision 1. Committed gameplay transitions advance it once. Reads, rejected
-commands, replays, and presence changes do not advance it.
+Each persistent connection has its own FIFO queue of 32 frames and one
+writer. A stalled client cannot block a room commit or another writer.
+Overflow removes its command authority and requests close 1013. A
+client whose acknowledgment was interrupted can reconnect, read the
+current snapshot, and retry the same ID while its hand is retained.
+Queue contents stay with the old connection during replacement.
+Structured cancellation ends the reader and writer together. This is
+one in-memory app on one worker.
 
-Gameplay commands use `action_id`, `hand_id`, and `expected_revision`.
-Each acknowledgment reports `outcome_revision` separately from snapshots.
-Replay identity is `(seat, hand_id, action_id)`. Keep outcomes for the current
-and previous hand. Reject new commands at the per-seat capacity without
-evicting an ID that could execute again. The same room boundary coordinates
-connection changes and engine transitions. Per-connection queues preserve
-publication order without awaiting network sends inside that boundary.
+### Future clocks and recovery
 
-Final rules and the engine/server boundary remain joint decisions. Deepthi
-owns new transport and integration tests. Srishruthik owns the engine and
-its independent fixtures, and previously contributed the lobby HTTP routes,
-authentication, and connection registry.
+Pending joint approval, use server monotonic time and an exclusive
+30-second turn deadline. On expiry, check when legal and otherwise fold.
+Each absent seat has an independent exclusive 20-second deadline.
+Pause the turn and preserve its remaining time while either seat is
+absent. On timely return of both seats, resume that remaining time. At
+the earliest applicable expiry, close without a winner if both remain
+absent. If only one is absent, that seat forfeits. Route authoritative
+callbacks through the same room boundary and invalidate callbacks tied
+to an old hand or connection. Day 2 implements socket replacement
+without game clocks, disconnect deadlines, or forfeits.

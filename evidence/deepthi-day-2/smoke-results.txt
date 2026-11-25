@@ -1,0 +1,73 @@
+Day 2 live verification. Each scenario used a separate local Uvicorn process.
+
+Historical comparison using the server at eee3489
+$ uv run --locked python evidence/deepthi-day-2/smoke.py --scenario showdown
+Traceback (most recent call last):
+  File "<checkout>/evidence/deepthi-day-2/smoke.py", line 226, in <module>
+    main()
+    ~~~~^^
+  File "<checkout>/evidence/deepthi-day-2/smoke.py", line 203, in main
+    assert waiting == {
+           ^^^^^^^^^^^^
+    ...<5 lines>...
+    }, (
+    ^
+AssertionError: expected waiting snapshot, received error (INVALID_MESSAGE)
+Exit status: 1
+
+Legacy smoke scripts on Day 2
+$ uv run --locked python evidence/deepthi-day-1/smoke.py
+$ uv run --locked python evidence/integration-day1-day3/smoke.py
+GET /health -> 200
+POST /api/rooms -> 422
+POST /api/rooms -> 201
+WebSocket A -> waiting (status fields only)
+POST /api/rooms/join -> 200
+WebSocket B -> ready (status fields only)
+POST /api/rooms/join -> 409
+WebSocket room code -> 1008 (no application payload)
+Day 1 smoke checks passed
+POST /api/rooms -> 201 (A waiting, bet unit 12)
+POST /api/join with unknown Unicode code -> 404
+POST /api/join -> 201 (B joins A's room, A receives lobby update)
+GET /api/session -> 200 (B identity only)
+WebSocket B replacement -> old socket closed 4000, new socket pong
+WebSocket lobby presence -> A observes B disconnect
+POST /api/rooms/join -> 409 (shared room full)
+Integration smoke checks passed
+
+Deterministic Day 2 fixture app
+$ uv run --locked uvicorn launch:showdown --factory --app-dir evidence/deepthi-day-2 --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+$ uv run --locked python evidence/deepthi-day-2/smoke.py --scenario showdown
+$ uv run --locked python evidence/deepthi-day-2/smoke.py --scenario fold
+$ uv run --locked uvicorn launch:tie --factory --app-dir evidence/deepthi-day-2 --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+$ uv run --locked python evidence/deepthi-day-2/smoke.py --scenario tie
+A authenticated and waiting at revision 0
+revision 1 preflop: A/B 195/190, pot 15
+revision 2 preflop: A/B 190/190, pot 20
+replay, conflict, stale revision, and wrong turn verified at revision 2
+revision 3 flop: A/B 190/190, pot 20
+revision 4 flop: A/B 190/190, pot 20
+revision 5 turn: A/B 190/190, pot 20
+revision 6 turn: A/B 190/190, pot 20
+revision 7 river: A/B 190/190, pot 20
+revision 8 river: A/B 190/190, pot 20
+revision 9 showdown: A/B 210/190, pot 0
+showdown gameplay smoke passed
+A authenticated and waiting at revision 0
+revision 1 preflop: A/B 195/190, pot 15
+revision 2 finished: A/B 195/205, pot 0
+fold gameplay smoke passed
+A authenticated and waiting at revision 0
+revision 1 preflop: A/B 195/190, pot 15
+revision 2 preflop: A/B 190/190, pot 20
+replay, conflict, stale revision, and wrong turn verified at revision 2
+revision 3 flop: A/B 190/190, pot 20
+revision 4 flop: A/B 190/190, pot 20
+revision 5 turn: A/B 190/190, pot 20
+revision 6 turn: A/B 190/190, pot 20
+revision 7 river: A/B 190/190, pot 20
+revision 8 river: A/B 190/190, pot 20
+revision 9 showdown: A/B 200/200, pot 0
+tie gameplay smoke passed
+All five Day 2 live checks exited 0.
