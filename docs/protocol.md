@@ -1,6 +1,6 @@
 # Day 1 multiplayer protocol
 
-Status: Srishruthik's draft for partner review, November 25, 2026. The HTTP table, join, and session endpoints now exist; WebSocket actions and the browser do not. It uses the target rules in [rules.md](rules.md).
+Status: Srishruthik's draft for partner review, November 25, 2026. HTTP admission, token-authenticated WebSocket lobby messages, and a replacement-safe connection registry now exist. Gameplay actions, game snapshots, and the browser do not. It uses the target rules in [rules.md](rules.md).
 
 ## Ownership and session lifecycle
 
@@ -10,6 +10,7 @@ The engine owns cards, legal actions, betting, and settlement. The FastAPI serve
 - `POST /api/join` accepts a room code, fills seat B, and returns B's distinct private token and seat. Reject unknown codes and a third seat without changing table state. A code alone cannot reclaim an occupied seat.
 - `GET /api/session` with `Authorization: Bearer <token>` returns only that token's seat and whether both seats are filled. It is a small admission milestone endpoint, not a game snapshot.
 - `WS /ws` begins with `{ "type": "auth", "token": "..." }`. The server binds the socket to the token's seat and ignores client-selected seat identity. A valid reconnect replaces the old socket safely and receives a fresh personal snapshot. Invalid tokens receive no game state.
+- Until engine integration, an authenticated socket receives a typed `lobby` message with `your_seat`, `table_ready`, and public A/B connection flags. Gameplay requests receive `NOT_READY` and never call the old-rule engine. This is the implemented Day 3 boundary, not the final game snapshot.
 - Keep tokens out of URLs, later state messages, logs committed as evidence, and opponent messages. In-memory sessions do not survive a server restart.
 - Validate origin, message size, JSON shape, allowed fields, and action names. Never expose raw exceptions.
 

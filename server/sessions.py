@@ -71,3 +71,7 @@ class SessionStore:
                     if secrets.compare_digest(issued, token):
                         return seat, table.ready
             raise SessionError("UNAUTHORIZED", "Invalid session token")
+
+    def table_ready(self) -> bool:
+        with self._lock:
+            return self._table is not None and self._table.ready
