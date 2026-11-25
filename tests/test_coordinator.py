@@ -284,3 +284,48 @@ class DeliveryTests(unittest.IsolatedAsyncioTestCase):
                     (self.rooms.snapshot().revision, self.rooms.snapshot().hand.pot),
                     (2, 20),
                 )
+
+    async def test_delayed_writer_resumes_in_revision_order(self):
+        slow = FakeSocket(blocked=True)
+        a = self.attach("A", slow)
+        b = self.attach("B", FakeSocket())
+        idle = asyncio.Event()
+        writer = asyncio.create_task(a.run(idle.wait))
+        try:
+            await asyncio.wait_for(slow.entered.wait(), 2)
+            self.game.submit("A", a, action("call", 1))
+            self.game.submit("B", b, action("check", 2, "check"))
+            slow.blocked.set()
+            messages = [await self.receive(slow) for _ in range(4)]
+            self.assertEqual(
+                [
+                    (m["type"], m.get("revision", m.get("outcome_revision")))
+                    for m in messages
+                ],
+                [("snapshot", 1), ("action_ack", 2), ("snapshot", 2), ("snapshot", 3)],
+            )
+        finally:
+            idle.set()
+            await asyncio.wait_for(writer, 2)
+
+    async def test_one_legal_seat_wins_against_a_competing_wrong_turn(self):
+        a, b = self.attach("A", FakeSocket()), self.attach("B", FakeSocket())
+        for connection in (a, b):
+            connection.queue.get_nowait()
+        barrier = asyncio.Barrier(3)
+
+        async def submit(seat, connection):
+            await barrier.wait()
+            self.game.submit(seat, connection, action("same-revision", 1))
+
+        async with asyncio.TaskGroup() as group:
+            group.create_task(submit("A", a))
+            group.create_task(submit("B", b))
+            await barrier.wait()
+        self.assertTrue(a.queue.get_nowait()["accepted"])
+        b_messages = [b.queue.get_nowait() for _ in range(b.queue.qsize())]
+        rejected = next(m for m in b_messages if m["type"] == "action_ack")
+        self.assertIn(rejected["error_code"], {"WRONG_TURN", "STALE_REVISION"})
+        self.assertEqual(
+            (self.rooms.snapshot().revision, self.rooms.snapshot().hand.pot), (2, 20)
+        )
