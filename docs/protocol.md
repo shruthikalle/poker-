@@ -163,3 +163,32 @@ Confirm whether transport should derive hand IDs from the engine's
 match result and a paid tie. The newer rules draft also requires decisions
 about bet-unit configurability and the future division of implementation
 work. Neither lobby format carries cards or gameplay state today.
+
+## Day 2 implementation contract
+
+The following contract guides the Day 2 implementation. The project keeps
+one FastAPI app factory, one room manager and one connection registry.
+`/api/rooms` and `/api/rooms/join` are the canonical admission paths.
+`/api/table`, `/api/join`, and `/api/session` remain lobby compatibility
+routes. Both existing WebSocket auth shapes remain supported. Gameplay uses
+`{"type":"auth","token":"…","protocol":"gameplay.v1"}` on the same persistent
+socket and binds the commands to the authenticated current connection.
+The explicit opt-in preserves exact lobby payloads for existing clients.
+
+A snapshot uses `type: "snapshot"`, `revision`, and the room-scoped engine
+`hand_id`. Waiting starts at revision 0 with no hand. The first deal is
+revision 1. Committed gameplay transitions advance it once. Reads, rejected
+commands, replays, and presence changes do not advance it.
+
+Gameplay commands use `action_id`, `hand_id`, and `expected_revision`.
+Each acknowledgment reports `outcome_revision` separately from snapshots.
+Replay identity is `(seat, hand_id, action_id)`. Keep outcomes for the current
+and previous hand. Reject new commands at the per-seat capacity without
+evicting an ID that could execute again. The same room boundary coordinates
+connection changes and engine transitions. Per-connection queues preserve
+publication order without awaiting network sends inside that boundary.
+
+Final rules and the engine/server boundary remain joint decisions. Deepthi
+owns new transport and integration tests. Srishruthik owns the engine and
+its independent fixtures, and previously contributed the lobby HTTP routes,
+authentication, and connection registry.
