@@ -80,6 +80,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "pydantic" },
+    { name = "treys" },
     { name = "uvicorn" },
     { name = "websockets" },
 ]
@@ -93,6 +94,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.165.0" },
     { name = "pydantic", specifier = ">=2.14.4" },
+    { name = "treys", specifier = "==0.1.8" },
     { name = "uvicorn", specifier = ">=0.54.0" },
     { name = "websockets", specifier = ">=17.4" },
 ]
@@ -322,6 +324,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/48/bb/3d8757f21e9a53d9035c9eb039a777047139a16bfdbedfc7a58241c3d914/starlette-1.10.0.tar.gz", hash = "sha256:b8399098d4c1e3522734f7235dc79b1fc967f96cf139c81e0fa30479e0685f9b", size = 2734356, upload-time = "2026-10-24T15:04:12.342Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/2e/947cfe02def9371c07cd5bf5b6b61c829e9aecb9904db02a66cfafbc1eec/starlette-1.10.0-py3-none-any.whl", hash = "sha256:478c0ab3b4ced6e82719849c118fa406f0278a3499c1a898cd15cd31bdc38ce4", size = 80571, upload-time = "2026-10-24T15:04:10.371Z" },
+]
+
+[[package]]
+name = "treys"
+version = "0.1.8"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3b/a6/1712340dc1ac96d40afe162d43ce146c7781ba59cde5efc988aaee35ada4/treys-0.1.8.tar.gz", hash = "sha256:a486a42b899e91985b4da4fdac9a30e638275648977104487acb90a2dd7cd73b", size = 12073, upload-time = "2022-06-21T16:02:44.976Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/46/df/e6b3b1cc98c3e00c5b146113f998dfe0de47358277648df235a6ae571143/treys-0.1.8-py3-none-any.whl", hash = "sha256:9ba3460ff2ed597510fb535af6280f115254b0b70699ea362f8f1ee067378063", size = 11897, upload-time = "2022-06-21T16:02:42.896Z" },
 ]
 
 [[package]]

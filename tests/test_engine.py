@@ -1,4 +1,4 @@
-"""Independent expected values from README cases G1, R1, and G2."""
+"""Independent expected values for opening turns, raises, and folding."""
 
 import unittest
 

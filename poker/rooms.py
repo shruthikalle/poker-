@@ -62,11 +62,11 @@ class RoomManager:
     def __init__(
         self,
         *,
-        code_factory: Callable[[], str] = lambda: token_urlsafe(9),
-        token_factory: Callable[[], str] = lambda: token_urlsafe(32),
+        code_factory: Callable[[], str] | None = None,
+        token_factory: Callable[[], str] | None = None,
     ) -> None:
-        self._code_factory = code_factory
-        self._token_factory = token_factory
+        self._code_factory = code_factory or (lambda: token_urlsafe(9))
+        self._token_factory = token_factory or (lambda: token_urlsafe(32))
         self._lock = Lock()
         self._room: Room | None = None
 
@@ -85,7 +85,12 @@ class RoomManager:
     def join(self, room_code: object) -> Admission:
         with self._lock:
             room = self._room
-            if room is None or type(room_code) is not str or room_code != room.code:
+            if (
+                room is None
+                or type(room_code) is not str
+                or not room_code.isascii()
+                or not compare_digest(room.code, room_code)
+            ):
                 raise RoomNotFound("room not found")
             if room.seat_b_token is not None:
                 raise RoomFull("room is full")

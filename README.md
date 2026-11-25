@@ -2,21 +2,29 @@
 
 A browser-based, two-player Texas Hold'em game using **virtual chips only**. One player creates a private room and shares its code; the other joins from a second browser. The server owns the deck, rules, timers, and game state. Each browser receives only the information that player is allowed to see.
 
-This README is the project plan and test specification. The initial Python engine and Day 1 multiplayer foundation are runnable and tested. The foundation provides HTTP room admission, first-hand initialization when B joins, and authenticated WebSocket room status. Browser play, gameplay messages, timers, reconnect recovery, and showdown payout remain planned.
+The integrated development app runs the existing configurable-bet-unit engine through showdown and subsequent hands. Both HTTP admission contracts and both WebSocket lobby formats use one room per running app. Player B's admission initializes the first hand. Gameplay messages, timers, reconnect deadlines, player-specific game views, and the browser remain planned.
 
-Team: Srishruthik Alle and Deepthi Morusupalli. Contact: shruthik.alle@gmail.com; Deepthi's contact email will be added after she provides it.
+Team: Srishruthik Alle and Deepthi Morusupalli, CS 378 Agentic Software Engineering.
+
+## Implemented rules and target draft
+
+The numerical fixtures below describe the current engine. [The target rule draft](docs/rules.md) proposes fixed 500-chip stacks, 5/10 blinds, street-dependent increments, three raises, burns, and the odd chip going to the nondealer. Adopting it would require engine, admission, and fixture changes. The current app uses the configurable unit and defaults to 10 when creating through the lobby API.
+
+The Day 1 commits reflect the earlier plan with Srishruthik on the engine and Deepthi on the real-time layer. Srishruthik's later draft proposes Deepthi owning engine migration, rules, accounting, showdown, and independent fixtures, with Srishruthik owning server, browser, and integration work. Both plans assign the shared interface, evidence, demo, and slides to both partners. Confirm the forward split together before assigning more work.
+
+The repository's first commit is `c29badee2f21e6542c67a176304460b14cea13b6` (README only, November 23, 2026). The first engine commit is `34aa241`. The branch histories record each partner's actual contributions.
 
 ## Planned demo
 
-1. Create a room and choose the table's fixed bet unit.
+1. Create a room using the table rules agreed for the demo.
 2. Join it from a second browser using the room code.
 3. Play a prepared hand through betting rounds and showdown.
 4. Show that an action from the wrong player is rejected without changing the turn or pot.
 5. Show that one player can disconnect and rejoin during a hand, while the other browser never receives that player's private cards before showdown.
 
-## Rules and scope
+## Existing engine rules and scope
 
-These are deliberate rules for the first version, so the UI, server, and tests can agree on one behavior. We will use the standard 52-card deck and Texas Hold'em hand rankings, but a **fixed-limit** betting structure to keep the first build manageable.
+The table describes the behavior exercised by the current engine tests. [Target rule draft](docs/rules.md)
 
 | Area | First-version rule |
 | --- | --- |
@@ -24,7 +32,7 @@ These are deliberate rules for the first version, so the UI, server, and tests c
 | Chips | Each player starts with 20 times the chosen bet unit in virtual chips. There is no real-money play. |
 | Bet unit | The host chooses an even whole-chip amount from 2 to 20 before the second player joins. It cannot change during a match. |
 | Blinds | The dealer/button posts a small blind of half the bet unit; the other player posts a big blind of one bet unit. The button alternates after each hand. |
-| Deal | Each player gets two private cards. Community cards are dealt as flop (3), turn (1), and river (1). |
+| Deal | Each player gets two private cards. The button receives the first card, then cards alternate. The next five cards become the flop (3), turn (1), and river (1). This simplified version does not burn cards. |
 | Turn order | The small blind acts first before the flop. The big blind acts first on each later betting round. |
 | Actions | Fold, check, call, bet, and raise. The server decides which are legal from the current state; the browser only displays those choices. |
 | Bet size | An opening bet is one bet unit. A raise increases the current wager by exactly one bet unit, so the player pays the amount needed to call **plus** one bet unit. The big blind counts as the opening wager before the flop. At most two raises follow an opening wager in each round. No custom amounts, all-ins, or side pots. |
@@ -48,9 +56,9 @@ Player actions must include a unique action ID. Replaying the same ID must retur
 
 Before showdown, **no WebSocket message sent to a player may contain the opponent's hole cards**, including join responses, action results, reconnect snapshots, errors, and timer updates. Spectators are not supported. At showdown the server may reveal both hands. A hand ending by fold or forfeit does not reveal the cards. The server creates a separate player-specific view for each message rather than sending one complete game state to both browsers.
 
-## Agreed components and ownership
+## Shared boundary and previous ownership record
 
-Srishruthik and Deepthi agreed to this split. The repository's commit history and this section will be updated to reflect the work each person actually completes.
+The table records the plan represented by the original commits. Final attribution follows each person's actual contributions.
 
 | Owner | Main responsibility | Evidence to produce |
 | --- | --- | --- |
@@ -60,11 +68,13 @@ Srishruthik and Deepthi agreed to this split. The repository's commit history an
 
 The boundary between the parts is a server-side game API: the real-time layer submits a player identity and requested action; the game engine returns the new state or a rejection. Only the real-time layer converts state into player-specific messages. Neither browser is trusted to calculate the pot, choose the next turn, or decide the winner.
 
-The current engine API is `new_game(bet_unit=10, deck=None)`, `legal_actions(state, player)`, and `apply_action(state, player, action)`. `apply_action` returns an `ActionResult` with `accepted`, `state`, and `error`. On rejection, `state` is the original unchanged object. On success, it is a new immutable state. The real-time layer uses `new_game` when B joins. WebSocket authentication binds a token to a seat and sends a filtered room-status message. Gameplay requests, action deduplication, and player-specific card views remain planned. [Multiplayer protocol and integration contract](docs/protocol.md)
+The engine API is `new_game(bet_unit=10, deck=None)`, `legal_actions(state, player)`, and `apply_action(state, player, action, *, deck=None)`. `apply_action` returns an `ActionResult` with `accepted`, `state`, and `error`. On rejection, `state` is the original unchanged object. On success, it is a new immutable state. The optional `deck` argument is only for the **second** Ready action and allows a prepared next hand in tests; normal play omits it.
+
+At showdown, the engine evaluates and awards the pot immediately, then sets `phase="showdown"`. This is the only completed-hand phase in which a client may see both hole-card pairs. A fold sets `phase="finished"` and must not reveal the opponent's cards. `winner=None` in a showdown means a tie; `match_winner` is set when a player cannot fund the next big blind. The WebSocket layer authenticates players and sends filtered lobby views. Gameplay actions, deduplication, clocks, and gameplay views remain planned. **Never serialize `GameState` directly to a client:** it includes both private hands and the remaining deck.
 
 ## Test cases and expected results
 
-These are specifications to turn into automated tests. **G1, G2, G5, G7, R1, and R3 pass in the engine suite. R5 (bet-unit validation and immutability) and R6 (room and seat protection) pass in the Day 1 suite.** R9 has partial coverage for the waiting room and absence of a deal. Its scheduled clock and gameplay-action scenarios remain planned, as do full R7 and C4 coverage and the other numbered cases. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store the actual fixture files and runnable tests with the code. Expected pot and stack values below are calculated from the stated rules, independently of the implementation or Treys.
+These are **older-rule** expected values, not tests for the target PDF rules. Engine tests cover the numeric and rule portions of **G1-G12, R1-R3, R5, R10, and C1-C3** under the existing implementation. Update these fixtures and tests as the engine changes. Admission tests cover R5 and R6 and the waiting-room and no-deal portions of R9. Lobby tests cover token privacy and socket replacement. Action IDs, timer behavior, reconnect deadlines, and gameplay message privacy remain planned. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store actual fixture files and runnable tests with the code.
 
 ### Common fixture
 
@@ -77,7 +87,7 @@ Unless a case says otherwise, set bet unit **10**, player **A** as the first but
 | G1 | Start a hand from the common fixture. | Only A may act. A may fold, call **5**, or raise to a total round contribution of **20** (paying **15**). A cannot check or make a new opening bet while facing the blind. |
 | G2 | A calls **5**; B checks. | After the call: pot **20**, A **190**, B **190**, B's turn. After B checks: flop begins, contributions reset to **0/0**, three community cards appear, pot stays **20**, and B acts first. |
 | G3 | From G2, B bets **10**; A calls **10**. | After B bets: pot **30**, A **190**, B **180**, A's turn. After A calls: pot **40**, A **180**, B **180**; turn begins, contributions reset, one more community card appears, and B acts first. |
-| G4 | From G3, B checks; A checks; B checks; A checks. | The first pair of checks advances from turn to river, revealing one card. The second pair advances to showdown. Pot remains **40** throughout; no extra cards are dealt. |
+| G4 | From G3, B checks; A checks; B checks; A checks. | The first pair of checks advances from turn to river, revealing one card. The second pair reaches showdown. Pot stays **40** until showdown, then is awarded and becomes **0**; no extra cards are dealt. |
 | G5 | From the initial state, A folds. | Hand ends immediately. B receives the **15**-chip pot; final stacks are A **195**, B **205**, pot **0**. No hole cards are revealed. |
 | G6 | From G2, B bets **10** and A folds. | B receives the **30**-chip pot; final stacks are A **190**, B **210**, pot **0**. This checks that B receives back chips already contributed to the pot. |
 | G7 | From the initial state, A raises to **20** (pays **15**); B raises to **30** (pays **20**). | Pot **50**; A **180**, B **170**; contributions **20/30**; A acts next. A may call **10** or fold, but a third raise is rejected. If A calls, pot **60**, stacks **170/170**, and the flop begins. |
@@ -132,50 +142,39 @@ Use two fixed seven-card results whose rankings are obvious without a library. F
 | C5 | End the winner fixture by fold or disconnect before showdown. | The result identifies the winner but does **not** reveal the losing player's hole cards in any outbound message. |
 | C6 | Inspect the flop, turn, and river messages for either player. | Board length is exactly **3**, then **4**, then **5**. Neither client receives a future board card early, and a reconnect snapshot contains only the current board. |
 
-The highest-value automated checks are G1-G8, R1-R4, T1-T6, and C4-C6: they exercise code we build. C1-C2 are integration checks for Treys and pot payout. The README's specific numbers are the independent expected results; the tests should assert them exactly. Planting a wrong turn, payout, or privacy filter should make the corresponding test fail.
+Under the older rule set, the highest-value automated checks are G1-G8, R1-R4, T1-T6, and C4-C6. C1-C2 check Treys integration and payout. These numeric expectations must be recalculated for the target rules in [docs/rules.md](docs/rules.md) before they are used as new acceptance tests. Planting a wrong turn, payout, or privacy filter should make the corresponding test fail.
 
 ## Implementation and attribution
 
-The project began as a new codebase. We plan to build the game logic, room protocol, privacy filtering, reconnect behavior, and browser interface ourselves. These direct dependencies are locked for Day 1.
+The project began as a new codebase. The combined lockfile includes the following direct dependencies.
 
-- HTTP and WebSocket routing with [FastAPI 0.165.0](https://pypi.org/project/fastapi/0.165.0/).
-- Strict transport schemas with [Pydantic 2.14.4](https://pypi.org/project/pydantic/2.14.4/).
-- The ASGI runtime and WebSocket implementation use [Uvicorn 0.54.0](https://pypi.org/project/uvicorn/0.54.0/) and [websockets 17.4](https://pypi.org/project/websockets/17.4/).
-- The development dependency for TestClient and the live smoke client is [HTTPX2 2.16.2](https://pypi.org/project/httpx2/2.16.2/).
+- HTTP and WebSocket routing uses [FastAPI 0.165.0](https://pypi.org/project/fastapi/0.165.0/).
+- Transport validation uses [Pydantic 2.14.4](https://pypi.org/project/pydantic/2.14.4/).
+- The ASGI server and WebSocket protocol use [Uvicorn 0.54.0](https://pypi.org/project/uvicorn/0.54.0/) and [websockets 17.4](https://pypi.org/project/websockets/17.4/).
+- Hand evaluation uses [Treys 0.1.8](https://pypi.org/project/treys/0.1.8/).
+- Development tests use [HTTPX2 2.16.2](https://pypi.org/project/httpx2/2.16.2/).
+- The rules reference uses standard poker terminology. [WSOP rules](https://www.wsop.com/poker-games/texas-holdem/rules/)
 
-The following references apply to the game rules and planned showdown work:
-
-- [Treys 0.1.8](https://pypi.org/project/treys/0.1.8/) for card representation and hand evaluation.
-- [WSOP rules](https://www.wsop.com/poker-games/texas-holdem/rules/) as a reference for hand and action terminology; our supported betting rules are specified above.
-
-`uv.lock` records the full dependency resolution, including transitive versions. Additional reused code or assets will be documented with links. Course homework material will not be used. Agent-assisted code and each partner's contributions will be identified in the final slides and repository history.
+The original engine and tests were built with Codex under Srishruthik's direction. Deepthi's Day 1 work added the configurable room API, private session tokens, and first-hand initialization. Srishruthik's later server work added the lobby API, connection tracking, and socket replacement. Actual partner and agent contributions will be identified in the final slides and repository history.
 
 ## Setup and demo
 
-The first engine milestone was tested with Python **3.13.5** and uv **0.12.3**. Day 1 was verified with Python **3.13.9** and uv **0.12.3**. The `.python-version` file selects Python 3.13, and `uv.lock` records the project environment. From a fresh clone:
+Use Python 3.13 and uv. No external accounts or credentials are required to run the local app and tests.
 
 ```sh
-cd /path/to/your/clone
 uv sync --locked
 uv run --locked python -m unittest discover -s tests -v
-```
-
-The local tests and demo run without external accounts or credentials. Start one server in the first terminal.
-
-```sh
 uv run --locked uvicorn poker.server:create_app --factory --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
 ```
 
-In a second terminal, run the smoke check against an empty server. It verifies
-health, room admission, rejection of a third join, and WebSocket status for
-both seats. Restart the server to clear the room before running it again.
+`server.main:app` also serves both admission contracts. Run one app entry point per server. Start with an empty process for each smoke run. In a second terminal, run the Day 1 smoke script or the integration smoke script.
 
 ```sh
 uv run --locked python evidence/deepthi-day-1/smoke.py
+uv run --locked python evidence/integration-day1-day3/smoke.py
 ```
 
-For manual HTTP requests, start with an empty server and replace `ROOM_CODE`
-with the code from A's response. Share only the room code with B.
+For manual room admission, start with an empty server and replace `ROOM_CODE` with the code from A's response. Share only the room code with B.
 
 ```sh
 curl -sS http://127.0.0.1:8000/health
@@ -183,16 +182,13 @@ curl -sS -H 'Content-Type: application/json' -d '{"bet_unit":10}' http://127.0.0
 curl -sS -H 'Content-Type: application/json' -d '{"room_code":"ROOM_CODE"}' http://127.0.0.1:8000/api/rooms/join
 ```
 
-### Day 1 files and evidence
+### Main files and evidence
 
-- [poker/rooms.py](poker/rooms.py) owns in-memory admission, seat credentials, and the atomic first-hand initialization.
-- [poker/server.py](poker/server.py) exposes health, admission, and WebSocket authentication.
-- [tests/test_rooms.py](tests/test_rooms.py) verifies room rules and competing requests. [tests/test_server.py](tests/test_server.py) verifies HTTP and WebSocket behavior.
-- [docs/protocol.md](docs/protocol.md) describes the current wire format, privacy allowlists, and engine handoff.
-- [Baseline results](evidence/deepthi-day-1/baseline.txt), [final results](evidence/deepthi-day-1/test-results.txt), and [engineering notes](evidence/deepthi-day-1/notes.md) preserve the measured tests and reproduction steps.
+- [poker/rooms.py](poker/rooms.py) owns room state, admission, credentials, and initial hand creation.
+- [poker/server.py](poker/server.py) serves both HTTP and WebSocket contracts. [server/connections.py](server/connections.py) tracks lobby sockets by seat. [server/sessions.py](server/sessions.py) maps the older lobby API to the same room.
+- [docs/protocol.md](docs/protocol.md) describes both current contracts and the gameplay decisions still open.
+- [Day 1 baseline](evidence/deepthi-day-1/baseline.txt) and [Day 1 results](evidence/deepthi-day-1/test-results.txt) preserve the original checks and reproduction steps.
 
 ## Known limits of the first version
 
 The game supports heads-up play only, one active room per server process, fixed-size bets, and no all-ins or side pots. A player who cannot afford a call must fold. These are explicit scope choices; we will record any later change and why we made it.
-
-Day 1 runs on loopback with a single worker. The room and tokens live in memory until the process exits. The bet unit is fixed at creation. WebSockets send one room-status snapshot at authentication. Gameplay, live updates, connection replacement, and the browser demonstration remain future milestones.

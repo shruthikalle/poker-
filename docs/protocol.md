@@ -1,6 +1,6 @@
 # Multiplayer integration contract
 
-The README defines the agreed poker rules. The application owns admission,
+The README describes the implemented poker rules. The target draft proposes a different contract. [Target rules](rules.md) The application owns admission,
 seat credentials, transport, and future match coordination. The engine owns
 the authoritative immutable state and transitions for a poker hand. The browser
 renders the server's views and submits requests.
@@ -25,12 +25,21 @@ are published together after initialization succeeds. The bet unit is fixed
 at creation, a conservative choice within the README's requirement to choose
 it before B joins.
 
-The current engine can advance to showdown and settle a fold. Showdown
-evaluation, payout, and a next-hand operation that preserves stacks and
-alternates the button require future engine work and joint agreement. The
-application uses the existing API for the first hand.
+The engine settles showdown and folds. A paid showdown has
+`phase="showdown"` and a zero pot. At showdown, `winner=None` means a tie.
+A fold sets `phase="finished"`. `match_winner` records a terminal outcome
+when the current rule prevents the next deal. Keep that distinct from the
+hand winner.
 
-## Day 1 transport
+`apply_action(state, player, action, *, deck=None)` accepts the optional
+deck only when the second Ready action starts a hand. The engine owns
+`ready_players`, the stack-preserving deal, button rotation, and
+`hand_number`. Outside the active betting phases, `legal_actions` may
+return `ready` even when there is no actor. Engine errors remain plain
+strings. The current transport calls `new_game` and leaves action handling
+for gameplay integration.
+
+## Implemented transport
 
 Run one Uvicorn worker and one app instance. The in-memory room lives until
 process exit. Separate factory calls provide isolated state for tests.
@@ -49,14 +58,37 @@ a hand ends. Room requests accept only their documented fields. Errors use
 a fixed `detail` string with 422 for invalid input, 404 for an unknown code,
 or 409 for an existing room or full room.
 
+The lobby routes share the same two seats and credentials.
+
+| Request | Success |
+| --- | --- |
+| `POST /api/table` | 201 with `room_code`, `seat`, and `session_token`. Uses bet unit 10. |
+| `POST /api/join` with `{"room_code":"…"}` | 201 with `seat` and `session_token`. |
+| `GET /api/session` with `Authorization: Bearer <token>` | 200 with `seat` and `table_ready`. |
+
+Lobby failures preserve the coded `detail` object for `TABLE_EXISTS`,
+`TABLE_FULL`, `INVALID_CODE`, and `UNAUTHORIZED`. Both join routes
+initialize the same engine hand and notify subscribed lobby sockets.
+
 The WebSocket endpoint is `/ws`. Within five seconds of opening the socket,
 send `{"type":"authenticate","session_token":"…"}` as the first JSON text
 message. Send the token only in that frame. Invalid authentication closes
 with code 1008 and no application payload. A successful handshake sends
 exactly `type: "room_status"`, `seat`, `bet_unit`, and `status` for the
-authenticated seat. The socket stays open after its one-time snapshot. Any
-additional application message closes it with code 1008. Connection presence,
-exclusive access per seat, and gameplay updates are future work.
+authenticated seat. The socket stays open after its one-time snapshot.
+An additional application message closes it with code 1008.
+
+The lobby handshake uses `{"type":"auth","token":"…"}`. Its personalized
+`lobby` message contains `your_seat`, `table_ready`, and `connected` flags
+for A and B. Lobby sockets get presence and admission updates, replace an
+old lobby socket on the same seat, and accept `ping` with a `pong` reply.
+Other well-formed requests receive `NOT_READY`. The `room_status` mode
+provides a one-time status snapshot without participating in lobby presence.
+Both modes accept local browser origins and non-browser clients that omit
+Origin, and both cap inbound messages at 4,096 UTF-8 bytes. Valid auth
+messages select their reply format. The legacy `server.main:app` launch
+also keeps the lobby error response for ambiguous malformed first
+messages. The `poker.server:create_app` launch closes those without a payload.
 
 ## Planned WebSocket messages
 
@@ -109,8 +141,25 @@ the server.
   When both are absent, close without a winner at grace expiration. Agree
   on which grace deadline governs overlapping disconnects before implementing
   the two-disconnect path.
-- After a hand ends, keep one Ready flag per seat for that hand. Duplicate
-  Ready requests are idempotent. Begin the next hand only with both Ready,
-  an open match, and enough chips to post the full big blind while retaining
-  at least one chip. The engine must carry stacks forward and alternate
-  the button for that deal.
+- After a hand ends, route authenticated Ready requests to the engine's
+  `ready` action. Increment revision on the first accepted Ready and on
+  the next deal. Use the replay cache for an identical retry. A fresh
+  duplicate request must leave state unchanged. The current engine tests
+  enforce the full-big-blind affordability rule. Resolve the target draft's
+  seat-specific affordability rule before migrating.
+
+## Joint decisions before gameplay
+
+Choose one gameplay schema from the two proposals. Srishruthik's draft
+uses `expected_revision` in action requests, public `revision` in state
+messages, and the replay key `(seat, hand_id, action_id)` with hand-scoped
+retention. The proposal above uses `state_revision` and a room-lifetime
+per-seat cache. Agree how long past acknowledgments remain available and
+keep them distinct from fresh snapshots. Both drafts use separate
+per-recipient allowlists and forbid raw engine state on the wire.
+
+Confirm whether transport should derive hand IDs from the engine's
+`hand_number`. Confirm stable error codes and how to represent the terminal
+match result and a paid tie. The newer rules draft also requires decisions
+about bet-unit configurability and the future division of implementation
+work. Neither lobby format carries cards or gameplay state today.
