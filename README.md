@@ -2,21 +2,35 @@
 
 A browser-based, two-player Texas Hold'em game using **virtual chips only**. One player creates a private room and shares its code; the other joins from a second browser. The server owns the deck, rules, timers, and game state. Each browser receives only the information that player is allowed to see.
 
-This README is the project plan and test specification. The Python game engine now runs through showdown and can start another hand. The browser, WebSocket server, timers, reconnects, and player-specific message filtering are still to be built.
+This README records the current implementation and the new target plan from the supplied comprehensive project PDF. The Python engine runs through showdown and a second hand; the server and browser remain to be built. **The existing engine and numeric test cases below use the older rules.** The team selected the PDF rules as the target on November 25, 2026; they are documented in [docs/rules.md](docs/rules.md). The proposed Day 1 server contract is in [docs/protocol.md](docs/protocol.md).
 
-Team: Srishruthik Alle and Deepthi Morusupalli. Contact: shruthik.alle@gmail.com; Deepthi's contact email will be added after she provides it.
+Team: Srishruthik Alle (SA59576) and Deepthi Morusupalli (dam6639), CS 378 Agentic Software Engineering.
+
+## Day 1 plan and current status
+
+| Person | New plan ownership | Day 1 deliverable |
+| --- | --- | --- |
+| Deepthi | Standalone poker engine, rules, accounting, showdown, and independent fixtures | Review and approve [docs/rules.md](docs/rules.md), hand-calculate expected outcomes, and identify changes needed in the existing engine |
+| Srishruthik | FastAPI server, WebSockets, sessions, private views, browser, and integration tests | Review and approve [docs/protocol.md](docs/protocol.md), including join, identity, action, privacy, and error behavior |
+| Both | Shared interface, integration, reviews, evidence, demo, and slides | Agree on the two contracts before parallel implementation |
+
+The repo currently has the older-rule engine and 22 engine tests, but no server or browser. Its engine was generated with Codex under Srishruthik's direction before adopting this new ownership split. Future ownership does not change actual contribution history. Deepthi's first engine task is to inspect, revise, test, and be able to explain this existing code. No PDF milestone is treated as completed merely because it appears in the plan.
+
+The repository's genuine first commit is `c29badee2f21e6542c67a176304460b14cea13b6` (a README-only commit on November 23, 2026). The first engine commit is `34aa241`. No later scaffold is presented as the starting point.
+
+The **target rules** are 500 chips per player, 5/10 blinds, fixed 10-chip bet/raise increments preflop and flop, 20-chip increments on turn and river, up to three raises after the opening wager, one burn card before each board street, and the odd chip in a tie going to the nondealer. The current engine instead uses 200 chips, a configurable even bet unit on every street, two raises, no burns, and the odd chip going to the button. The engine and tests must be migrated before server integration claims the target behavior.
 
 ## Planned demo
 
-1. Create a room and choose the table's fixed bet unit.
+1. Create a room with the target fixed 500-chip, 5/10-blind table settings.
 2. Join it from a second browser using the room code.
 3. Play a prepared hand through betting rounds and showdown.
 4. Show that an action from the wrong player is rejected without changing the turn or pot.
 5. Show that one player can disconnect and rejoin during a hand, while the other browser never receives that player's private cards before showdown.
 
-## Rules and scope
+## Existing engine rules and scope (to be migrated)
 
-These are deliberate rules for the first version, so the UI, server, and tests can agree on one behavior. We will use the standard 52-card deck and Texas Hold'em hand rankings, but a **fixed-limit** betting structure to keep the first build manageable.
+The following table describes the **current code**, not the newly selected target rules. It remains here so existing tests and their expected values can be understood during migration. The new contract is [docs/rules.md](docs/rules.md).
 
 | Area | First-version rule |
 | --- | --- |
@@ -48,9 +62,9 @@ Player actions must include a unique action ID. Replaying the same ID must retur
 
 Before showdown, **no WebSocket message sent to a player may contain the opponent's hole cards**, including join responses, action results, reconnect snapshots, errors, and timer updates. Spectators are not supported. At showdown the server may reveal both hands. A hand ending by fold or forfeit does not reveal the cards. The server creates a separate player-specific view for each message rather than sending one complete game state to both browsers.
 
-## Agreed components and ownership
+## Shared boundary and previous ownership record
 
-Srishruthik and Deepthi agreed to this split. The repository's commit history and this section will be updated to reflect the work each person actually completes.
+The table below records the previous plan represented by the existing commits. The new forward-looking split is in the Day 1 section above. Final attribution must describe what each person actually completes.
 
 | Owner | Main responsibility | Evidence to produce |
 | --- | --- | --- |
@@ -66,7 +80,7 @@ At showdown, the engine evaluates and awards the pot immediately, then sets `pha
 
 ## Test cases and expected results
 
-These are specifications to turn into automated tests. Engine tests now cover the numeric and rule portions of **G1-G12, R1-R3, R5, R10, and C1-C3**. Tests for room access, action IDs, timers, reconnects, and outbound privacy messages remain planned; the privacy assertion in G5 is also pending. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store the actual fixture files and runnable tests with the code. Expected pot and stack values below are calculated from the stated rules, independently of the implementation or Treys.
+These are **older-rule** expected values, not tests for the target PDF rules. Engine tests cover the numeric and rule portions of **G1-G12, R1-R3, R5, R10, and C1-C3** under the existing implementation. Update these fixtures and tests as the engine changes. Tests for room access, action IDs, timers, reconnects, and outbound privacy messages remain planned; the privacy assertion in G5 is also pending. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store actual fixture files and runnable tests with the code.
 
 ### Common fixture
 
@@ -134,17 +148,17 @@ Use two fixed seven-card results whose rankings are obvious without a library. F
 | C5 | End the winner fixture by fold or disconnect before showdown. | The result identifies the winner but does **not** reveal the losing player's hole cards in any outbound message. |
 | C6 | Inspect the flop, turn, and river messages for either player. | Board length is exactly **3**, then **4**, then **5**. Neither client receives a future board card early, and a reconnect snapshot contains only the current board. |
 
-The highest-value automated checks are G1-G8, R1-R4, T1-T6, and C4-C6: they exercise code we build. C1-C2 are integration checks for Treys and pot payout. The README's specific numbers are the independent expected results; the tests should assert them exactly. Planting a wrong turn, payout, or privacy filter should make the corresponding test fail.
+Under the older rule set, the highest-value automated checks are G1-G8, R1-R4, T1-T6, and C4-C6. C1-C2 check Treys integration and payout. These numeric expectations must be recalculated for the target rules in [docs/rules.md](docs/rules.md) before they are used as new acceptance tests. Planting a wrong turn, payout, or privacy filter should make the corresponding test fail.
 
 ## Implementation and attribution
 
-The project starts without an existing codebase. We plan to build the game logic, room protocol, privacy filtering, reconnect behavior, and browser interface ourselves. Planned external dependencies are:
+The project started without an imported codebase. The existing engine and tests are now in this repository; the room protocol, privacy filtering, reconnect behavior, and browser interface remain to be built. Planned external dependencies are:
 
 - [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) for server-to-browser communication.
 - [Treys 0.1.8](https://pypi.org/project/treys/0.1.8/) for card representation and hand evaluation.
 - [WSOP rules](https://www.wsop.com/poker-games/texas-holdem/rules/) as a reference for hand and action terminology; our supported betting rules are specified above.
 
-Treys is pinned to **0.1.8** in `pyproject.toml` and `uv.lock`. Codex generated the engine implementation and tests from the agreed rules and worked expected values; Srishruthik owns the engine work and should inspect, correct, and be able to explain it. Deepthi owns the real-time layer and browser, which are not built yet. We will document any additional reused code or assets with links. Course homework material will not be used. Actual partner and agent contributions will be identified in the final slides and repository history.
+Treys is pinned to **0.1.8** in `pyproject.toml` and `uv.lock`. Codex generated the existing engine and tests under Srishruthik's direction for the older rules. The new plan assigns Deepthi the engine migration and Srishruthik the real-time layer and browser; neither migration nor server is built yet. We will document any additional reused code or assets with links. Course homework material will not be used. Actual partner and agent contributions will be identified in the final slides and repository history.
 
 ## Setup and demo
 
@@ -157,7 +171,7 @@ uv sync
 uv run python -m unittest discover -s tests -v
 ```
 
-No credentials or configuration are required for these tests. There is no browser demo command yet. Before submission, this section must include exact launch commands and clean-start two-browser demo steps.
+No credentials or configuration are required for these tests. There is no browser demo command yet. Before submission, this section must include clean-start two-browser demo steps.
 
 ## Known limits of the first version
 
