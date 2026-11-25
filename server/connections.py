@@ -1,80 +1,107 @@
-"""Track the current WebSocket for each seat without exposing session tokens."""
-
-from __future__ import annotations
+"""Per-seat socket ownership and bounded FIFO delivery."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+from anyio import create_task_group
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .sessions import Seat
 
+QUEUE_CAPACITY = 32
 
-@dataclass
+
+@dataclass(eq=False)
 class Connection:
     websocket: WebSocket
-    send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    gameplay: bool
+    queue: asyncio.Queue[dict[str, object]] = field(
+        default_factory=lambda: asyncio.Queue(maxsize=QUEUE_CAPACITY)
+    )
+    closing: asyncio.Event = field(default_factory=asyncio.Event)
+    close_code: int = 1000
 
-    async def send(self, payload: dict[str, object]) -> None:
-        async with self.send_lock:
-            await self.websocket.send_json(payload)
+    def request_close(self, code: int) -> None:
+        if not self.closing.is_set():
+            self.close_code = code
+            self.closing.set()
+
+    def offer(self, payload: dict[str, object]) -> None:
+        if self.closing.is_set():
+            return
+        try:
+            self.queue.put_nowait(payload)
+        except asyncio.QueueFull:
+            self.request_close(1013)
+
+    async def _write(self) -> None:
+        while True:
+            await self.websocket.send_json(await self.queue.get())
+
+    async def run(self, read: Callable[[], Awaitable[None]]) -> None:
+        async with create_task_group() as group:
+
+            async def end_when_done(operation: Callable[[], Awaitable[None]]) -> None:
+                try:
+                    await operation()
+                except (WebSocketDisconnect, OSError):
+                    pass
+                group.cancel_scope.cancel()
+
+            async def wait_for_close() -> None:
+                await self.closing.wait()
+
+            group.start_soon(end_when_done, read)
+            group.start_soon(end_when_done, self._write)
+            group.start_soon(end_when_done, wait_for_close)
+
+    async def finish_close(self) -> None:
+        if self.closing.is_set():
+            try:
+                await asyncio.wait_for(self.websocket.close(code=self.close_code), 1)
+            except (TimeoutError, RuntimeError, OSError, WebSocketDisconnect):
+                pass
 
 
 class ConnectionRegistry:
-    """One active socket per seat; old socket cleanup cannot remove a replacement."""
+    """Access from the event loop under the room synchronization boundary."""
 
     def __init__(self) -> None:
-        self._lock = asyncio.Lock()
         self._current: dict[Seat, Connection] = {}
 
-    async def attach(self, seat: Seat, websocket: WebSocket) -> Connection | None:
-        async with self._lock:
-            previous = self._current.get(seat)
-            self._current[seat] = Connection(websocket)
-            return previous
+    def attach(self, seat: Seat, connection: Connection) -> None:
+        previous = self._current.get(seat)
+        self._current[seat] = connection
+        if previous is not None:
+            previous.request_close(4000)
 
-    async def detach_if_current(self, seat: Seat, websocket: WebSocket) -> bool:
-        async with self._lock:
-            current = self._current.get(seat)
-            if current is None or current.websocket is not websocket:
-                return False
-            del self._current[seat]
-            return True
+    def is_current(self, seat: Seat, connection: Connection) -> bool:
+        return self._current.get(seat) is connection and not connection.closing.is_set()
 
-    async def connected(self) -> dict[Seat, bool]:
-        async with self._lock:
-            return {seat: seat in self._current for seat in ("A", "B")}
+    def detach_if_current(self, seat: Seat, connection: Connection) -> bool:
+        if self._current.get(seat) is not connection:
+            return False
+        del self._current[seat]
+        return True
 
-    async def broadcast_lobby(self, table_ready: bool) -> None:
-        async with self._lock:
-            current = dict(self._current)
-            connected = {seat: seat in current for seat in ("A", "B")}
-        for seat, connection in current.items():
-            # No engine object or token is ever included in a lobby snapshot.
-            try:
-                await connection.send(
-                    LobbySnapshot(
-                        your_seat=seat,
-                        table_ready=table_ready,
-                        connected=connected,
-                    ).as_message()
+    def active(self) -> tuple[tuple[Seat, Connection], ...]:
+        return tuple(
+            (seat, connection)
+            for seat, connection in self._current.items()
+            if not connection.closing.is_set()
+        )
+
+    def publish_lobby(self, table_ready: bool) -> None:
+        active = self.active()
+        connected = dict(active)
+        for seat, connection in active:
+            if not connection.gameplay:
+                connection.offer(
+                    {
+                        "type": "lobby",
+                        "your_seat": seat,
+                        "table_ready": table_ready,
+                        "connected": {"A": "A" in connected, "B": "B" in connected},
+                    }
                 )
-            except (RuntimeError, OSError, WebSocketDisconnect):
-                await self.detach_if_current(seat, connection.websocket)
-
-
-@dataclass(frozen=True)
-class LobbySnapshot:
-    """Typed, allowlisted server snapshot before game integration."""
-
-    your_seat: Seat
-    table_ready: bool
-    connected: dict[Seat, bool]
-
-    def as_message(self) -> dict[str, object]:
-        return {
-            "type": "lobby",
-            "your_seat": self.your_seat,
-            "table_ready": self.table_ready,
-            "connected": {"A": self.connected["A"], "B": self.connected["B"]},
-        }

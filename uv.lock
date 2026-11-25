@@ -78,6 +78,7 @@ name = "heads-up-live-poker"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "fastapi" },
     { name = "pydantic" },
     { name = "treys" },
@@ -92,6 +93,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.16.0" },
     { name = "fastapi", specifier = ">=0.165.0" },
     { name = "pydantic", specifier = ">=2.14.4" },
     { name = "treys", specifier = "==0.1.8" },

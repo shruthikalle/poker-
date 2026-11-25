@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Two-player Texas Hold'em game and multiplayer server"
 requires-python = ">=3.11"
 dependencies = [
+    "anyio>=4.16.0",
     "fastapi>=0.165.0",
     "pydantic>=2.14.4",
     "treys==0.1.8",

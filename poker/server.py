@@ -19,7 +19,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from server.connections import ConnectionRegistry
+from server.commands import COMMAND_SCHEMA
+from server.connections import Connection
+from server.coordinator import GameCoordinator
 from server.sessions import SessionError, SessionStore
 
 from .engine import Player
@@ -111,38 +113,57 @@ async def _send_error(socket: WebSocket, code: str, message: str) -> None:
 
 
 async def _lobby_socket(
-    socket: WebSocket,
-    token: str,
-    sessions: SessionStore,
-    connections: ConnectionRegistry,
+    socket: WebSocket, token: str, coordinator: GameCoordinator, gameplay: bool
 ) -> None:
-    try:
-        seat, _ = await run_in_threadpool(sessions.seat_for_token, token)
-    except SessionError:
+    connection = Connection(socket, gameplay)
+    seat = coordinator.attach(token, connection)
+    if seat is None:
         await _send_error(socket, "UNAUTHORIZED", "Invalid session token")
         await socket.close(code=1008)
         return
 
-    previous = await connections.attach(seat, socket)
-    try:
-        if previous is not None:
-            try:
-                await previous.websocket.close(code=4000)
-            except (RuntimeError, OSError, WebSocketDisconnect):
-                pass
-        await connections.broadcast_lobby(sessions.table_ready())
-
+    async def read_commands() -> None:
         while True:
             message = await _receive_message(socket)
             if message == {"type": "ping"}:
-                await socket.send_json({"type": "pong"})
+                coordinator.reply(seat, connection, {"type": "pong"})
+            elif gameplay and message == {"type": "snapshot_request"}:
+                coordinator.snapshot(seat, connection)
+            elif gameplay:
+                try:
+                    command = COMMAND_SCHEMA.validate_python(message)
+                except ValidationError:
+                    coordinator.reply(
+                        seat, connection, {"type": "error", "code": "INVALID_MESSAGE"}
+                    )
+                else:
+                    coordinator.submit(seat, connection, command)
             elif message is None:
-                await _send_error(socket, "INVALID_MESSAGE", "Invalid message")
+                coordinator.reply(
+                    seat,
+                    connection,
+                    {
+                        "type": "error",
+                        "code": "INVALID_MESSAGE",
+                        "message": "Invalid message",
+                    },
+                )
             else:
-                await _send_error(socket, "NOT_READY", "Gameplay is not available yet")
+                coordinator.reply(
+                    seat,
+                    connection,
+                    {
+                        "type": "error",
+                        "code": "NOT_READY",
+                        "message": "Gameplay is not available yet",
+                    },
+                )
+
+    try:
+        await connection.run(read_commands)
     finally:
-        if await connections.detach_if_current(seat, socket):
-            await connections.broadcast_lobby(sessions.table_ready())
+        coordinator.detach(seat, connection)
+        await connection.finish_close()
 
 
 def create_app(
@@ -151,7 +172,7 @@ def create_app(
     app = FastAPI(title="Heads-Up Live Poker")
     manager = RoomManager() if rooms is None else rooms
     sessions = SessionStore(manager=manager)
-    connections = ConnectionRegistry()
+    coordinator = GameCoordinator(manager)
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(
@@ -191,13 +212,12 @@ def create_app(
     )
     async def join_room(body: JoinRoomRequest, response: Response) -> Admission:
         try:
-            admission = await run_in_threadpool(manager.join, body.room_code)
+            admission = coordinator.admit(manager.join, body.room_code)
         except RoomNotFound as exc:
             raise HTTPException(404, str(exc)) from exc
         except RoomFull as exc:
             raise HTTPException(409, str(exc)) from exc
         response.headers["Cache-Control"] = "no-store"
-        await connections.broadcast_lobby(table_ready=True)
         return admission
 
     @app.post("/api/table", status_code=201)
@@ -214,14 +234,13 @@ def create_app(
     @app.post("/api/join", status_code=201)
     async def join_table(body: LobbyJoinRequest, response: Response) -> dict[str, str]:
         try:
-            token = await run_in_threadpool(sessions.join, body.room_code)
+            token = coordinator.admit(sessions.join, body.room_code)
         except SessionError as exc:
             status = 409 if exc.code == "TABLE_FULL" else 404
             raise HTTPException(
                 status, {"code": exc.code, "message": exc.message}
             ) from exc
         response.headers["Cache-Control"] = "no-store"
-        await connections.broadcast_lobby(table_ready=True)
         return {"seat": "B", "session_token": token}
 
     @app.get("/api/session")
@@ -276,10 +295,18 @@ def create_app(
                 await socket.close(code=1008)
             elif (
                 kind == "auth"
-                and set(message) == {"type", "token"}
+                and (
+                    set(message) == {"type", "token"}
+                    or (
+                        set(message) == {"type", "token", "protocol"}
+                        and message["protocol"] == "gameplay.v1"
+                    )
+                )
                 and isinstance(message["token"], str)
             ):
-                await _lobby_socket(socket, message["token"], sessions, connections)
+                await _lobby_socket(
+                    socket, message["token"], coordinator, "protocol" in message
+                )
             else:
                 if kind == "auth" or lobby_errors:
                     await _send_error(socket, "INVALID_MESSAGE", "Authenticate first")
