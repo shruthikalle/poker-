@@ -1,0 +1,254 @@
+Integration verification
+Environment: CPython 3.13.9, uv 0.12.3, macOS arm64
+Temporary checkout paths in captured outputs are abbreviated.
+
+Partner snapshot (0f48df7), default warnings
+$ uv run --locked python -m unittest discover -s tests -v
+----------------------------------------------------------------------
+Ran 31 tests in 0.068s
+
+OK
+
+Partner snapshot (0f48df7), warnings treated as errors
+$ uv run --locked python -W error -m unittest discover -s tests -v
+test_connections (unittest.loader._FailedTest.test_connections) ... ERROR
+test_sessions (unittest.loader._FailedTest.test_sessions) ... ERROR
+ImportError: Failed to import test module: test_connections
+DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+ImportError: Failed to import test module: test_sessions
+DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+Ran 24 tests in 0.006s
+FAILED (errors=2)
+
+Partner snapshot Unicode room code diagnosis
+create status: 201
+unknown Unicode room code status: 500
+TypeError: comparing strings with non-ASCII characters is not supported
+
+Combined regression tests before unifying endpoints
+$ uv run --locked python -m unittest discover -s tests -p test_integration.py -v
+test_lobby_creation_then_room_join_uses_default_and_broadcasts (test_integration.CombinedAdmissionTests.test_lobby_creation_then_room_join_uses_default_and_broadcasts) ... FAIL
+test_room_creation_then_lobby_join_deals_with_host_bet_unit (test_integration.CombinedAdmissionTests.test_room_creation_then_lobby_join_deals_with_host_bet_unit) ... ERROR
+test_unknown_non_ascii_room_code_returns_404_without_claiming_seat (test_integration.CombinedAdmissionTests.test_unknown_non_ascii_room_code_returns_404_without_claiming_seat) ... FAIL
+
+======================================================================
+ERROR: test_room_creation_then_lobby_join_deals_with_host_bet_unit (test_integration.CombinedAdmissionTests.test_room_creation_then_lobby_join_deals_with_host_bet_unit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<checkout>/tests/test_integration.py", line 27, in test_room_creation_then_lobby_join_deals_with_host_bet_unit
+    host_socket.receive_json(),
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "<checkout>/.venv/lib/python3.13/site-packages/starlette/testclient.py", line 190, in receive_json
+    self._raise_on_close(message)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "<checkout>/.venv/lib/python3.13/site-packages/starlette/testclient.py", line 143, in _raise_on_close
+    raise WebSocketDisconnect(code=message.get("code", 1000), reason=message.get("reason", ""))
+starlette.websockets.WebSocketDisconnect
+
+======================================================================
+FAIL: test_lobby_creation_then_room_join_uses_default_and_broadcasts (test_integration.CombinedAdmissionTests.test_lobby_creation_then_room_join_uses_default_and_broadcasts)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<checkout>/tests/test_integration.py", line 61, in test_lobby_creation_then_room_join_uses_default_and_broadcasts
+    self.assertEqual(host.status_code, 201)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 201
+
+======================================================================
+FAIL: test_unknown_non_ascii_room_code_returns_404_without_claiming_seat (test_integration.CombinedAdmissionTests.test_unknown_non_ascii_room_code_returns_404_without_claiming_seat)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<checkout>/tests/test_integration.py", line 90, in test_unknown_non_ascii_room_code_returns_404_without_claiming_seat
+    self.assertEqual(self.client.post("/api/table").status_code, 201)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 201
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.029s
+
+FAILED (failures=2, errors=1)
+
+Lobby fixture diagnosis before sharing a client context
+broadcast event loop: 4406976400 ready: False connected: {'A': True, 'B': False}
+broadcast event loop: 4406097744 ready: True connected: {'A': True, 'B': False}
+broadcast event loop: 4407657744 ready: True connected: {'A': True, 'B': True}
+Timeout (0:00:03)!
+
+Same diagnostic with a shared client context
+broadcast event loop: 4393509488 ready: False connected: {'A': True, 'B': False}
+broadcast event loop: 4393509488 ready: True connected: {'A': True, 'B': False}
+broadcast event loop: 4393509488 ready: True connected: {'A': True, 'B': True}
+A observed: {'type': 'lobby', 'your_seat': 'A', 'table_ready': True, 'connected': {'A': True, 'B': True}}
+broadcast event loop: 4393509488 ready: True connected: {'A': True, 'B': False}
+broadcast event loop: 4393509488 ready: True connected: {'A': False, 'B': False}
+
+Combined checks
+$ uv sync --locked
+Resolved 21 packages in 4ms
+Checked 20 packages in 0.34ms
+
+$ uv run --locked python -m unittest discover -s tests -v
+test_game_action_is_not_applied_before_engine_integration (test_connections.ConnectionTests.test_game_action_is_not_applied_before_engine_integration) ... ok
+test_invalid_auth_and_client_selected_seat_are_rejected (test_connections.ConnectionTests.test_invalid_auth_and_client_selected_seat_are_rejected) ... ok
+test_join_and_websocket_lobby_updates (test_connections.ConnectionTests.test_join_and_websocket_lobby_updates) ... ok
+test_rejects_foreign_origin_and_oversized_auth_message (test_connections.ConnectionTests.test_rejects_foreign_origin_and_oversized_auth_message) ... ok
+test_replaced_socket_cannot_remove_new_connection (test_connections.ConnectionTests.test_replaced_socket_cannot_remove_new_connection) ... ok
+test_g1_initial_legal_actions_and_blinds (test_engine.FirstHandTests.test_g1_initial_legal_actions_and_blinds) ... ok
+test_g2_call_then_check_reveals_flop (test_engine.FirstHandTests.test_g2_call_then_check_reveals_flop) ... ok
+test_g5_fold_awards_the_pot (test_engine.FirstHandTests.test_g5_fold_awards_the_pot) ... ok
+test_g7_r3_two_raises_then_third_is_rejected (test_engine.FirstHandTests.test_g7_r3_two_raises_then_third_is_rejected) ... ok
+test_r1_out_of_turn_action_leaves_every_field_unchanged (test_engine.FirstHandTests.test_r1_out_of_turn_action_leaves_every_field_unchanged) ... ok
+test_big_blind_may_raise_after_small_blind_calls (test_gameplay.BettingTests.test_big_blind_may_raise_after_small_blind_calls) ... ok
+test_g10_match_ends_if_next_big_blind_cannot_be_posted (test_gameplay.BettingTests.test_g10_match_ends_if_next_big_blind_cannot_be_posted) ... ok
+test_g11_second_hand_alternates_button_and_blinds (test_gameplay.BettingTests.test_g11_second_hand_alternates_button_and_blinds) ... ok
+test_g12_raise_cap_resets_after_round (test_gameplay.BettingTests.test_g12_raise_cap_resets_after_round) ... ok
+test_g3_bet_call_advances_to_turn_with_correct_pot (test_gameplay.BettingTests.test_g3_bet_call_advances_to_turn_with_correct_pot) ... ok
+test_g4_turn_and_river_checks_reach_paid_showdown (test_gameplay.BettingTests.test_g4_turn_and_river_checks_reach_paid_showdown) ... ok
+test_g6_flop_fold_awards_all_chips_in_pot (test_gameplay.BettingTests.test_g6_flop_fold_awards_all_chips_in_pot) ... ok
+test_g8_two_checks_advance_once_then_reject_stale_check (test_gameplay.BettingTests.test_g8_two_checks_advance_once_then_reject_stale_check) ... ok
+test_g9_call_that_would_empty_stack_is_illegal (test_gameplay.BettingTests.test_g9_call_that_would_empty_stack_is_illegal) ... ok
+test_postflop_bet_raise_call_closes_round (test_gameplay.BettingTests.test_postflop_bet_raise_call_closes_round) ... ok
+test_r10_repeated_ready_does_not_start_a_new_hand (test_gameplay.BettingTests.test_r10_repeated_ready_does_not_start_a_new_hand) ... ok
+test_r2_reject_invalid_actions_without_mutating_state (test_gameplay.BettingTests.test_r2_reject_invalid_actions_without_mutating_state) ... ok
+test_c1_pair_of_aces_wins_known_deal (test_gameplay.DealTests.test_c1_pair_of_aces_wins_known_deal) ... ok
+test_c2_known_ace_high_tie_splits_pot (test_gameplay.DealTests.test_c2_known_ace_high_tie_splits_pot) ... ok
+test_c3_bad_next_deck_leaves_finished_hand_unchanged (test_gameplay.DealTests.test_c3_bad_next_deck_leaves_finished_hand_unchanged) ... ok
+test_c3_reject_duplicate_or_short_deck (test_gameplay.DealTests.test_c3_reject_duplicate_or_short_deck) ... ok
+test_r5_reject_bad_bet_units (test_gameplay.DealTests.test_r5_reject_bad_bet_units) ... ok
+test_lobby_creation_then_room_join_uses_default_and_broadcasts (test_integration.CombinedAdmissionTests.test_lobby_creation_then_room_join_uses_default_and_broadcasts) ... ok
+test_room_creation_then_lobby_join_deals_with_host_bet_unit (test_integration.CombinedAdmissionTests.test_room_creation_then_lobby_join_deals_with_host_bet_unit) ... ok
+test_unknown_non_ascii_room_code_returns_404_without_claiming_seat (test_integration.CombinedAdmissionTests.test_unknown_non_ascii_room_code_returns_404_without_claiming_seat) ... ok
+test_accepts_every_even_bet_unit_inclusive (test_rooms.RoomCreationTests.test_accepts_every_even_bet_unit_inclusive) ... ok
+test_creation_assigns_only_a_and_does_not_deal (test_rooms.RoomCreationTests.test_creation_assigns_only_a_and_does_not_deal) ... ok
+test_default_generators_produce_url_safe_credentials (test_rooms.RoomCreationTests.test_default_generators_produce_url_safe_credentials) ... ok
+test_rejects_invalid_bet_units_without_mutating_state (test_rooms.RoomCreationTests.test_rejects_invalid_bet_units_without_mutating_state) ... ok
+test_rejects_second_room_and_preserves_original_session (test_rooms.RoomCreationTests.test_rejects_second_room_and_preserves_original_session) ... ok
+test_competing_creations_allocate_only_one_host (test_rooms.RoomJoiningTests.test_competing_creations_allocate_only_one_host) ... ok
+test_competing_joins_allocate_only_one_guest_and_preserve_host (test_rooms.RoomJoiningTests.test_competing_joins_allocate_only_one_guest_and_preserve_host) ... ok
+test_join_assigns_b_and_initializes_one_hand_with_host_unit (test_rooms.RoomJoiningTests.test_join_assigns_b_and_initializes_one_hand_with_host_unit) ... ok
+test_join_retries_a_duplicate_token (test_rooms.RoomJoiningTests.test_join_retries_a_duplicate_token) ... ok
+test_repeated_token_collision_leaves_room_waiting (test_rooms.RoomJoiningTests.test_repeated_token_collision_leaves_room_waiting) ... ok
+test_room_code_cannot_reclaim_a_seat_or_change_the_bet_unit (test_rooms.RoomJoiningTests.test_room_code_cannot_reclaim_a_seat_or_change_the_bet_unit) ... ok
+test_wrong_room_code_leaves_room_and_seats_unchanged (test_rooms.RoomJoiningTests.test_wrong_room_code_leaves_room_and_seats_unchanged) ... ok
+test_health_returns_only_running_status (test_server.HealthTests.test_health_returns_only_running_status) ... ok
+test_application_instances_have_independent_room_state (test_server.RoomHTTPTests.test_application_instances_have_independent_room_state) ... ok
+test_create_and_join_return_only_callers_admission (test_server.RoomHTTPTests.test_create_and_join_return_only_callers_admission) ... ok
+test_full_room_and_second_creation_return_conflicts_without_mutation (test_server.RoomHTTPTests.test_full_room_and_second_creation_return_conflicts_without_mutation) ... ok
+test_invalid_creation_requests_leave_room_empty (test_server.RoomHTTPTests.test_invalid_creation_requests_leave_room_empty) ... ok
+test_malformed_json_returns_fixed_error_without_mutation (test_server.RoomHTTPTests.test_malformed_json_returns_fixed_error_without_mutation) ... ok
+test_wrong_code_and_seat_claim_leave_waiting_room_unchanged (test_server.RoomHTTPTests.test_wrong_code_and_seat_claim_leave_waiting_room_unchanged) ... ok
+test_each_token_maps_to_its_original_seat_and_status_contains_no_cards (test_server.RoomWebSocketTests.test_each_token_maps_to_its_original_seat_and_status_contains_no_cards) ... ok
+test_gameplay_frames_cannot_change_state (test_server.RoomWebSocketTests.test_gameplay_frames_cannot_change_state) ... ok
+test_host_receives_only_waiting_status_before_join (test_server.RoomWebSocketTests.test_host_receives_only_waiting_status_before_join) ... ok
+test_invalid_credentials_and_client_seat_claims_close_without_payload (test_server.RoomWebSocketTests.test_invalid_credentials_and_client_seat_claims_close_without_payload) ... ok
+test_invalid_text_and_binary_authentication_close_without_payload (test_server.RoomWebSocketTests.test_invalid_text_and_binary_authentication_close_without_payload) ... ok
+test_create_join_and_private_seat_identity (test_sessions.AdmissionTests.test_create_join_and_private_seat_identity) ... ok
+test_duplicate_table_and_malformed_join (test_sessions.AdmissionTests.test_duplicate_table_and_malformed_join) ... ok
+test_invalid_code_and_third_join_do_not_take_a_seat (test_sessions.AdmissionTests.test_invalid_code_and_third_join_do_not_take_a_seat) ... ok
+test_no_token_or_room_code_can_impersonate_another_seat (test_sessions.AdmissionTests.test_no_token_or_room_code_can_impersonate_another_seat) ... ok
+
+----------------------------------------------------------------------
+Ran 58 tests in 0.137s
+
+OK
+
+$ uv run --locked python -W error -m unittest discover -s tests -v
+test_game_action_is_not_applied_before_engine_integration (test_connections.ConnectionTests.test_game_action_is_not_applied_before_engine_integration) ... ok
+test_invalid_auth_and_client_selected_seat_are_rejected (test_connections.ConnectionTests.test_invalid_auth_and_client_selected_seat_are_rejected) ... ok
+test_join_and_websocket_lobby_updates (test_connections.ConnectionTests.test_join_and_websocket_lobby_updates) ... ok
+test_rejects_foreign_origin_and_oversized_auth_message (test_connections.ConnectionTests.test_rejects_foreign_origin_and_oversized_auth_message) ... ok
+test_replaced_socket_cannot_remove_new_connection (test_connections.ConnectionTests.test_replaced_socket_cannot_remove_new_connection) ... ok
+test_g1_initial_legal_actions_and_blinds (test_engine.FirstHandTests.test_g1_initial_legal_actions_and_blinds) ... ok
+test_g2_call_then_check_reveals_flop (test_engine.FirstHandTests.test_g2_call_then_check_reveals_flop) ... ok
+test_g5_fold_awards_the_pot (test_engine.FirstHandTests.test_g5_fold_awards_the_pot) ... ok
+test_g7_r3_two_raises_then_third_is_rejected (test_engine.FirstHandTests.test_g7_r3_two_raises_then_third_is_rejected) ... ok
+test_r1_out_of_turn_action_leaves_every_field_unchanged (test_engine.FirstHandTests.test_r1_out_of_turn_action_leaves_every_field_unchanged) ... ok
+test_big_blind_may_raise_after_small_blind_calls (test_gameplay.BettingTests.test_big_blind_may_raise_after_small_blind_calls) ... ok
+test_g10_match_ends_if_next_big_blind_cannot_be_posted (test_gameplay.BettingTests.test_g10_match_ends_if_next_big_blind_cannot_be_posted) ... ok
+test_g11_second_hand_alternates_button_and_blinds (test_gameplay.BettingTests.test_g11_second_hand_alternates_button_and_blinds) ... ok
+test_g12_raise_cap_resets_after_round (test_gameplay.BettingTests.test_g12_raise_cap_resets_after_round) ... ok
+test_g3_bet_call_advances_to_turn_with_correct_pot (test_gameplay.BettingTests.test_g3_bet_call_advances_to_turn_with_correct_pot) ... ok
+test_g4_turn_and_river_checks_reach_paid_showdown (test_gameplay.BettingTests.test_g4_turn_and_river_checks_reach_paid_showdown) ... ok
+test_g6_flop_fold_awards_all_chips_in_pot (test_gameplay.BettingTests.test_g6_flop_fold_awards_all_chips_in_pot) ... ok
+test_g8_two_checks_advance_once_then_reject_stale_check (test_gameplay.BettingTests.test_g8_two_checks_advance_once_then_reject_stale_check) ... ok
+test_g9_call_that_would_empty_stack_is_illegal (test_gameplay.BettingTests.test_g9_call_that_would_empty_stack_is_illegal) ... ok
+test_postflop_bet_raise_call_closes_round (test_gameplay.BettingTests.test_postflop_bet_raise_call_closes_round) ... ok
+test_r10_repeated_ready_does_not_start_a_new_hand (test_gameplay.BettingTests.test_r10_repeated_ready_does_not_start_a_new_hand) ... ok
+test_r2_reject_invalid_actions_without_mutating_state (test_gameplay.BettingTests.test_r2_reject_invalid_actions_without_mutating_state) ... ok
+test_c1_pair_of_aces_wins_known_deal (test_gameplay.DealTests.test_c1_pair_of_aces_wins_known_deal) ... ok
+test_c2_known_ace_high_tie_splits_pot (test_gameplay.DealTests.test_c2_known_ace_high_tie_splits_pot) ... ok
+test_c3_bad_next_deck_leaves_finished_hand_unchanged (test_gameplay.DealTests.test_c3_bad_next_deck_leaves_finished_hand_unchanged) ... ok
+test_c3_reject_duplicate_or_short_deck (test_gameplay.DealTests.test_c3_reject_duplicate_or_short_deck) ... ok
+test_r5_reject_bad_bet_units (test_gameplay.DealTests.test_r5_reject_bad_bet_units) ... ok
+test_lobby_creation_then_room_join_uses_default_and_broadcasts (test_integration.CombinedAdmissionTests.test_lobby_creation_then_room_join_uses_default_and_broadcasts) ... ok
+test_room_creation_then_lobby_join_deals_with_host_bet_unit (test_integration.CombinedAdmissionTests.test_room_creation_then_lobby_join_deals_with_host_bet_unit) ... ok
+test_unknown_non_ascii_room_code_returns_404_without_claiming_seat (test_integration.CombinedAdmissionTests.test_unknown_non_ascii_room_code_returns_404_without_claiming_seat) ... ok
+test_accepts_every_even_bet_unit_inclusive (test_rooms.RoomCreationTests.test_accepts_every_even_bet_unit_inclusive) ... ok
+test_creation_assigns_only_a_and_does_not_deal (test_rooms.RoomCreationTests.test_creation_assigns_only_a_and_does_not_deal) ... ok
+test_default_generators_produce_url_safe_credentials (test_rooms.RoomCreationTests.test_default_generators_produce_url_safe_credentials) ... ok
+test_rejects_invalid_bet_units_without_mutating_state (test_rooms.RoomCreationTests.test_rejects_invalid_bet_units_without_mutating_state) ... ok
+test_rejects_second_room_and_preserves_original_session (test_rooms.RoomCreationTests.test_rejects_second_room_and_preserves_original_session) ... ok
+test_competing_creations_allocate_only_one_host (test_rooms.RoomJoiningTests.test_competing_creations_allocate_only_one_host) ... ok
+test_competing_joins_allocate_only_one_guest_and_preserve_host (test_rooms.RoomJoiningTests.test_competing_joins_allocate_only_one_guest_and_preserve_host) ... ok
+test_join_assigns_b_and_initializes_one_hand_with_host_unit (test_rooms.RoomJoiningTests.test_join_assigns_b_and_initializes_one_hand_with_host_unit) ... ok
+test_join_retries_a_duplicate_token (test_rooms.RoomJoiningTests.test_join_retries_a_duplicate_token) ... ok
+test_repeated_token_collision_leaves_room_waiting (test_rooms.RoomJoiningTests.test_repeated_token_collision_leaves_room_waiting) ... ok
+test_room_code_cannot_reclaim_a_seat_or_change_the_bet_unit (test_rooms.RoomJoiningTests.test_room_code_cannot_reclaim_a_seat_or_change_the_bet_unit) ... ok
+test_wrong_room_code_leaves_room_and_seats_unchanged (test_rooms.RoomJoiningTests.test_wrong_room_code_leaves_room_and_seats_unchanged) ... ok
+test_health_returns_only_running_status (test_server.HealthTests.test_health_returns_only_running_status) ... ok
+test_application_instances_have_independent_room_state (test_server.RoomHTTPTests.test_application_instances_have_independent_room_state) ... ok
+test_create_and_join_return_only_callers_admission (test_server.RoomHTTPTests.test_create_and_join_return_only_callers_admission) ... ok
+test_full_room_and_second_creation_return_conflicts_without_mutation (test_server.RoomHTTPTests.test_full_room_and_second_creation_return_conflicts_without_mutation) ... ok
+test_invalid_creation_requests_leave_room_empty (test_server.RoomHTTPTests.test_invalid_creation_requests_leave_room_empty) ... ok
+test_malformed_json_returns_fixed_error_without_mutation (test_server.RoomHTTPTests.test_malformed_json_returns_fixed_error_without_mutation) ... ok
+test_wrong_code_and_seat_claim_leave_waiting_room_unchanged (test_server.RoomHTTPTests.test_wrong_code_and_seat_claim_leave_waiting_room_unchanged) ... ok
+test_each_token_maps_to_its_original_seat_and_status_contains_no_cards (test_server.RoomWebSocketTests.test_each_token_maps_to_its_original_seat_and_status_contains_no_cards) ... ok
+test_gameplay_frames_cannot_change_state (test_server.RoomWebSocketTests.test_gameplay_frames_cannot_change_state) ... ok
+test_host_receives_only_waiting_status_before_join (test_server.RoomWebSocketTests.test_host_receives_only_waiting_status_before_join) ... ok
+test_invalid_credentials_and_client_seat_claims_close_without_payload (test_server.RoomWebSocketTests.test_invalid_credentials_and_client_seat_claims_close_without_payload) ... ok
+test_invalid_text_and_binary_authentication_close_without_payload (test_server.RoomWebSocketTests.test_invalid_text_and_binary_authentication_close_without_payload) ... ok
+test_create_join_and_private_seat_identity (test_sessions.AdmissionTests.test_create_join_and_private_seat_identity) ... ok
+test_duplicate_table_and_malformed_join (test_sessions.AdmissionTests.test_duplicate_table_and_malformed_join) ... ok
+test_invalid_code_and_third_join_do_not_take_a_seat (test_sessions.AdmissionTests.test_invalid_code_and_third_join_do_not_take_a_seat) ... ok
+test_no_token_or_room_code_can_impersonate_another_seat (test_sessions.AdmissionTests.test_no_token_or_room_code_can_impersonate_another_seat) ... ok
+
+----------------------------------------------------------------------
+Ran 58 tests in 0.133s
+
+OK
+
+$ uv lock --check --offline
+Resolved 21 packages in 1ms
+
+$ uvx --offline ruff==0.15.20 check .
+All checks passed!
+
+$ uvx --offline ruff==0.15.20 format --check .
+17 files already formatted
+
+$ git diff --check
+
+Live Day 1 smoke check on the combined app
+$ uv run --locked uvicorn poker.server:create_app --factory --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+$ uv run --locked python evidence/deepthi-day-1/smoke.py
+GET /health -> 200
+POST /api/rooms -> 422
+POST /api/rooms -> 201
+WebSocket A -> waiting (status fields only)
+POST /api/rooms/join -> 200
+WebSocket B -> ready (status fields only)
+POST /api/rooms/join -> 409
+WebSocket room code -> 1008 (no application payload)
+Day 1 smoke checks passed
+
+Live mixed-mode smoke check on a fresh combined app
+$ uv run --locked uvicorn server.main:app --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+$ uv run --locked python evidence/integration-day1-day3/smoke.py
+POST /api/rooms -> 201 (A waiting, bet unit 12)
+POST /api/join with unknown Unicode code -> 404
+POST /api/join -> 201 (B joins A's room, A receives lobby update)
+GET /api/session -> 200 (B identity only)
+WebSocket B replacement -> old socket closed 4000, new socket pong
+WebSocket lobby presence -> A observes B disconnect
+POST /api/rooms/join -> 409 (shared room full)
+Integration smoke checks passed

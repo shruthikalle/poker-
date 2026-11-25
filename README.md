@@ -187,7 +187,7 @@ curl -sS -H 'Content-Type: application/json' -d '{"room_code":"ROOM_CODE"}' http
 - [poker/rooms.py](poker/rooms.py) owns room state, admission, credentials, and initial hand creation.
 - [poker/server.py](poker/server.py) serves both HTTP and WebSocket contracts. [server/connections.py](server/connections.py) tracks lobby sockets by seat. [server/sessions.py](server/sessions.py) maps the older lobby API to the same room.
 - [docs/protocol.md](docs/protocol.md) describes both current contracts and the gameplay decisions still open.
-- [Day 1 baseline](evidence/deepthi-day-1/baseline.txt) and [Day 1 results](evidence/deepthi-day-1/test-results.txt) preserve the original checks and reproduction steps.
+- [Day 1 baseline](evidence/deepthi-day-1/baseline.txt) and [Day 1 results](evidence/deepthi-day-1/test-results.txt) preserve the original checks. The [integration notes](evidence/integration-day1-day3/notes.md) and [integration results](evidence/integration-day1-day3/test-results.txt) record the combined validation and joint decisions.
 
 ## Known limits of the first version
 
