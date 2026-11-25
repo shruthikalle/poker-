@@ -19,9 +19,11 @@ The room stores admission data and, once B joins, the initial engine state.
 The room code grants admission to the vacant B seat. The server assigns A to
 the creator and B to the joiner, then authenticates future commands against
 the separate private token issued to that seat. Creation leaves the hand
-absent. Joining serializes B's allocation and first-hand initialization in
-one transition. The bet unit is fixed at creation, a conservative choice
-within the README's requirement to choose it before B joins.
+absent. A per-app lock serializes creation, guest allocation, first-hand
+initialization, and authentication reads. B's session and the engine state
+are published together after initialization succeeds. The bet unit is fixed
+at creation, a conservative choice within the README's requirement to choose
+it before B joins.
 
 The current engine can advance to showdown and settle a fold. Showdown
 evaluation, payout, and a next-hand operation that preserves stacks and
@@ -30,7 +32,8 @@ application uses the existing API for the first hand.
 
 ## Day 1 transport
 
-This section defines the initial implementation target.
+Run one Uvicorn worker and one app instance. The in-memory room lives until
+process exit. Separate factory calls provide isolated state for tests.
 
 | Request | Success |
 | --- | --- |
@@ -39,19 +42,21 @@ This section defines the initial implementation target.
 | `POST /api/rooms/join` with `{"room_code":"…"}` | 200 with B's admission |
 
 Admission fields are `room_code`, `seat`, `session_token`, `bet_unit`,
-and `status`. Status is `waiting` or `ready`, where `ready` means both
-seats are allocated and the first hand has been initialized. It does not
-represent the future Ready flags. Room requests accept only their documented
+and `status`. Successful admission responses carry `Cache-Control: no-store`.
+Status is `waiting` or `ready`, where `ready` means both seats are allocated
+and the first hand has been initialized. The future Ready flags apply after
+a hand ends. Room requests accept only their documented
 fields. Errors use a fixed `detail` string with 422 for invalid input, 404
 for an unknown code, or 409 for an existing room or full room.
 
-The optional Day 1 WebSocket endpoint is `/ws`. Authenticate using the first
-JSON text message, `{"type":"authenticate","session_token":"…"}`. The token
-is kept out of the URL. Invalid authentication closes with code 1008 and
+The WebSocket endpoint is `/ws`. Within five seconds of opening the socket,
+send `{"type":"authenticate","session_token":"…"}` as the first JSON text
+message. Send the token only in that frame. Invalid authentication closes with code 1008 and
 no application payload. A successful handshake sends exactly the fields
 `type: "room_status"`, `seat`, `bet_unit`, and `status` for the
-authenticated seat. This is a one-time snapshot at authentication. Scheduled
-gameplay updates and connection replacement are future work.
+authenticated seat. The socket stays open after its one-time snapshot. Any
+additional application message closes it with code 1008. Connection presence,
+exclusive access per seat, and gameplay updates are future work.
 
 ## Planned WebSocket messages
 

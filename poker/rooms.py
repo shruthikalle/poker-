@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from secrets import token_urlsafe
+from secrets import compare_digest, token_urlsafe
 from threading import Lock
 from typing import Literal
 
@@ -32,6 +32,13 @@ class Admission:
     room_code: str = field(repr=False)
     seat: Player
     session_token: str = field(repr=False)
+    bet_unit: int
+    status: RoomStatus
+
+
+@dataclass(frozen=True)
+class RoomView:
+    seat: Player
     bet_unit: int
     status: RoomStatus
 
@@ -95,6 +102,21 @@ class RoomManager:
             )
             self._room = joined
             return Admission(joined.code, "B", token, joined.bet_unit, joined.status)
+
+    def authenticate(self, token: str) -> RoomView | None:
+        if not token or not token.isascii():
+            return None
+        with self._lock:
+            room = self._room
+            if room is None:
+                return None
+            if compare_digest(token, room.seat_a_token):
+                return RoomView("A", room.bet_unit, room.status)
+            if room.seat_b_token is not None and compare_digest(
+                token, room.seat_b_token
+            ):
+                return RoomView("B", room.bet_unit, room.status)
+            return None
 
     def snapshot(self) -> Room | None:
         """Return the immutable server-side state for inspection."""

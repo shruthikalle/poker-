@@ -1,5 +1,6 @@
 import unittest
 
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from poker.rooms import RoomManager
@@ -135,3 +136,105 @@ class RoomHTTPTests(unittest.TestCase):
             second = second_client.post("/api/rooms", json={"bet_unit": 20})
             self.assertEqual(second.status_code, 201)
             self.assertEqual(second.json()["bet_unit"], 20)
+
+
+class RoomWebSocketTests(unittest.TestCase):
+    def setUp(self) -> None:
+        tokens = iter(("test-session-a", "test-session-b"))
+        self.rooms = RoomManager(
+            code_factory=lambda: "test-room-code", token_factory=tokens.__next__
+        )
+        self.client = self.enterContext(TestClient(create_app(self.rooms)))
+        self.host = self.rooms.create(10)
+
+    def test_host_receives_only_waiting_status_before_join(self) -> None:
+        waiting = self.rooms.snapshot()
+        with self.client.websocket_connect("/ws") as socket:
+            socket.send_json(
+                {"type": "authenticate", "session_token": self.host.session_token}
+            )
+            self.assertEqual(
+                socket.receive_json(),
+                {
+                    "type": "room_status",
+                    "seat": "A",
+                    "bet_unit": 10,
+                    "status": "waiting",
+                },
+            )
+        self.assertIs(self.rooms.snapshot(), waiting)
+        self.assertIsNone(waiting.hand)
+
+    def test_each_token_maps_to_its_original_seat_and_status_contains_no_cards(
+        self,
+    ) -> None:
+        guest = self.rooms.join(self.host.room_code)
+        for admission, seat in ((self.host, "A"), (guest, "B")):
+            with (
+                self.subTest(seat=seat),
+                self.client.websocket_connect("/ws") as socket,
+            ):
+                socket.send_json(
+                    {"type": "authenticate", "session_token": admission.session_token}
+                )
+                self.assertEqual(
+                    socket.receive_json(),
+                    {
+                        "type": "room_status",
+                        "seat": seat,
+                        "bet_unit": 10,
+                        "status": "ready",
+                    },
+                )
+
+    def test_invalid_credentials_and_client_seat_claims_close_without_payload(self):
+        guest = self.rooms.join(self.host.room_code)
+        full = self.rooms.snapshot()
+        invalid_frames = (
+            {"type": "authenticate", "session_token": "unknown"},
+            {"type": "authenticate", "session_token": self.host.room_code},
+            {"type": "authenticate", "session_token": guest.session_token, "seat": "A"},
+            {"type": "authenticate", "session_token": "💳"},
+            {"type": "authenticate"},
+        )
+        for frame in invalid_frames:
+            with (
+                self.subTest(frame=frame),
+                self.client.websocket_connect("/ws") as socket,
+            ):
+                socket.send_json(frame)
+                with self.assertRaises(WebSocketDisconnect) as caught:
+                    socket.receive_json()
+                self.assertEqual(caught.exception.code, 1008)
+                self.assertEqual(caught.exception.reason, "")
+                self.assertIs(self.rooms.snapshot(), full)
+
+    def test_invalid_text_and_binary_authentication_close_without_payload(self):
+        for frame in ("{", b'{"type":"authenticate","session_token":"test-session-a"}'):
+            with (
+                self.subTest(frame=frame),
+                self.client.websocket_connect("/ws") as socket,
+            ):
+                if isinstance(frame, str):
+                    socket.send_text(frame)
+                else:
+                    socket.send_bytes(frame)
+                with self.assertRaises(WebSocketDisconnect) as caught:
+                    socket.receive_json()
+                self.assertEqual(caught.exception.code, 1008)
+
+    def test_gameplay_frames_cannot_change_state(self):
+        self.rooms.join(self.host.room_code)
+        before = self.rooms.snapshot()
+
+        with self.client.websocket_connect("/ws") as socket:
+            socket.send_json(
+                {"type": "authenticate", "session_token": self.host.session_token}
+            )
+            socket.receive_json()
+            socket.send_json({"type": "action", "action_id": "a1", "action": "call"})
+            with self.assertRaises(WebSocketDisconnect) as caught:
+                socket.receive_json()
+            self.assertEqual(caught.exception.code, 1008)
+
+        self.assertIs(self.rooms.snapshot(), before)
