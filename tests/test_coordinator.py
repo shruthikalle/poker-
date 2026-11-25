@@ -83,20 +83,43 @@ class CoordinatorTests(unittest.TestCase):
         )
         self.assertIs(self.rooms.snapshot(), current)
 
-    def test_rejected_outcomes_replay_and_capacity_does_not_evict(self):
+    def test_rejected_history_is_bounded_without_blocking_accepted_commands(self):
         current = self.rooms.snapshot()
         too_early = action("early", 1)
         rejected = self.command("B", too_early)
         self.assertEqual(rejected["error_code"], "WRONG_TURN")
-        for i in range(3):
+        for i in range(256):
             failure = self.command("B", action(f"stale{i}", 0), recover=True)
             self.assertEqual(failure["error_code"], "STALE_REVISION")
         self.assertEqual(
-            self.command("B", action("new", 1))["error_code"], "REPLAY_CAPACITY"
+            list(self.game._rejected[("B", 1)]), [f"stale{i}" for i in range(252, 256)]
         )
-        self.assertEqual(self.command("B", too_early), rejected)
+        self.assertEqual(
+            self.command("B", action("stale255", 1))["error_code"], "REPLAY_CONFLICT"
+        )
         self.assertIs(self.rooms.snapshot(), current)
-        self.assertTrue(self.command("A", action("new", 1), changed=True)["accepted"])
+        call = self.command("A", action("c", 1), changed=True)
+        self.assertEqual(
+            self.command("B", too_early, recover=True)["error_code"], "STALE_REVISION"
+        )
+        self.assertTrue(
+            self.command("B", action("check", 2, "check"), changed=True)["accepted"]
+        )
+        self.assertEqual(self.command("A", action("c", 1)), call)
+
+    def test_illegal_flood_cannot_consume_ready_capacity(self):
+        self.command("A", action("fold", 1, "fold"), changed=True)
+        for i in range(256):
+            self.assertEqual(
+                self.command("A", action(f"illegal{i}", 2))["error_code"],
+                "HAND_COMPLETE",
+            )
+        first = self.command("A", ready("ready-a", 2), changed=True)
+        self.assertTrue(first["accepted"])
+        self.assertTrue(
+            self.command("B", ready("ready-b", 3), changed=True)["accepted"]
+        )
+        self.assertEqual(self.command("A", ready("ready-a", 2)), first)
 
     def test_owner_replacement_and_unauthorized_commands(self):
         initial = self.rooms.snapshot()

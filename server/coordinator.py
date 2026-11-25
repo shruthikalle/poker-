@@ -11,7 +11,7 @@ from .commands import ActionCommand, Command
 from .connections import Connection, ConnectionRegistry
 from .views import player_view
 
-REPLAY_CAPACITY = 256
+REJECTED_REPLAY_CAPACITY = 256
 AdmissionResult = TypeVar("AdmissionResult")
 
 
@@ -35,11 +35,16 @@ class Acknowledgment:
 
 
 class GameCoordinator:
-    def __init__(self, rooms: RoomManager, *, replay_capacity: int = REPLAY_CAPACITY):
+    def __init__(
+        self, rooms: RoomManager, *, replay_capacity: int = REJECTED_REPLAY_CAPACITY
+    ):
         self._rooms = rooms
         self._connections = ConnectionRegistry()
         self._capacity = replay_capacity
-        self._replays: dict[
+        self._accepted: dict[
+            tuple[Player, int], dict[str, tuple[Command, Acknowledgment]]
+        ] = {}
+        self._rejected: dict[
             tuple[Player, int], dict[str, tuple[Command, Acknowledgment]]
         ] = {}
 
@@ -103,8 +108,9 @@ class GameCoordinator:
             updated = room
             hand = room.hand
             key = (seat, command.hand_id)
-            cache = self._replays.get(key, {})
-            previous = cache.get(command.action_id)
+            previous = self._accepted.get(key, {}).get(command.action_id)
+            if previous is None:
+                previous = self._rejected.get(key, {}).get(command.action_id)
 
             if previous is not None and previous[0] == command:
                 connection.offer(previous[1].message())
@@ -114,7 +120,6 @@ class GameCoordinator:
                 previous is None
                 and hand is not None
                 and command.hand_id == hand.hand_number
-                and len(cache) < self._capacity
             )
             if previous is not None:
                 error = "REPLAY_CONFLICT"
@@ -122,8 +127,6 @@ class GameCoordinator:
                 error = "NOT_READY"
             elif command.hand_id != hand.hand_number:
                 error = "WRONG_HAND"
-            elif not eligible:
-                error = "REPLAY_CAPACITY"
             elif command.expected_revision != room.revision:
                 error = "STALE_REVISION"
             else:
@@ -137,8 +140,11 @@ class GameCoordinator:
                 error,
             )
             if eligible:
+                history = self._accepted if outcome.accepted else self._rejected
+                cache = history.setdefault(key, {})
                 cache[command.action_id] = command, outcome
-                self._replays[key] = cache
+                if not outcome.accepted and len(cache) > self._capacity:
+                    del cache[next(iter(cache))]
                 if (
                     updated.hand is not None
                     and updated.hand.hand_number != command.hand_id
@@ -170,8 +176,7 @@ class GameCoordinator:
         return room, "ILLEGAL_ACTION"
 
     def _prune(self, hand_number: int) -> None:
-        self._replays = {
-            key: entries
-            for key, entries in self._replays.items()
-            if key[1] >= hand_number - 1
-        }
+        for history in (self._accepted, self._rejected):
+            for key in tuple(history):
+                if key[1] < hand_number - 1:
+                    del history[key]

@@ -1,0 +1,12 @@
+after 256 stale commands: accepted=False error=REPLAY_CAPACITY revision=1 pot=15
+Traceback (most recent call last):
+  File "<checkout>/evidence/deepthi-day-3/replay_probe.py", line 51, in <module>
+    main()
+    ~~~~^^
+  File "<checkout>/evidence/deepthi-day-3/replay_probe.py", line 47, in main
+    assert outcome["accepted"] and (room.revision, room.hand.pot) == (2, 20)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+Corrected implementation
+after 256 stale commands: accepted=True error=None revision=2 pot=20
