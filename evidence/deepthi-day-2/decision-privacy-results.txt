@@ -1,0 +1,2 @@
+controlled raw GameState: {"internal_fields": ["big_blind_option", "checks_in_row", "deck", "hole_cards"], "opponent_cards": ["3c", "Ts"], "passed": false, "private_room_fields": 0, "unrevealed_cards": 48}
+production seat A snapshot: {"internal_fields": [], "opponent_cards": [], "passed": true, "private_room_fields": 0, "unrevealed_cards": 0}

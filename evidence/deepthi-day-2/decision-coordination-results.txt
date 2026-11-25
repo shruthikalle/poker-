@@ -1,0 +1,2 @@
+controlled split checks: {"a_chips_deducted": 5, "accepted_transitions": 2, "at_most_once": false, "chips_conserved": true, "engine_calls": 2, "final_pot": 20, "revision_increments": 2}
+production coordinator: {"a_chips_deducted": 5, "accepted_transitions": 1, "at_most_once": true, "chips_conserved": true, "engine_calls": 1, "final_pot": 20, "revision_increments": 1}
