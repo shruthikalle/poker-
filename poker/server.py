@@ -3,6 +3,7 @@
 import json
 from asyncio import wait_for
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -18,7 +19,8 @@ from fastapi import (
 )
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from server.clock import Clock
@@ -197,6 +199,19 @@ def create_app(
                 tasks.cancel_scope.cancel()
 
     app = FastAPI(title="Heads-Up Live Poker", lifespan=lifespan)
+
+    static = Path(__file__).resolve().parent.parent / "server" / "static"
+    app.mount("/assets", StaticFiles(directory=static), name="browser-assets")
+
+    @app.get("/", include_in_schema=False)
+    def browser_app() -> FileResponse:
+        return FileResponse(
+            static / "index.html",
+            headers={
+                "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; "
+                "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+            },
+        )
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(

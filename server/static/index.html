@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Heads-Up Live Poker</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">♠</span> Heads-Up Live Poker</div>
+    <span id="connection-label" class="status-pill" role="status" hidden></span>
+  </header>
+  <main>
+    <p id="notice" class="notice" role="alert" hidden></p>
+    <section id="landing" class="landing" aria-labelledby="title">
+      <div class="hero">
+        <div class="hero-cards" aria-hidden="true"><span>A<small>♥</small></span><span>K<small>♠</small></span></div>
+        <p class="eyebrow">PRIVATE TABLE · TWO PLAYERS</p>
+        <h1 id="title" tabindex="-1">Heads-Up<br>Live Poker</h1>
+        <p class="lede">Play a private game of fixed-limit Texas Hold’em with a friend. Share a room code to get started.</p>
+        <details class="rules"><summary>Table rules</summary><p>Play with virtual chips. The host chooses a fixed bet unit, and each player starts with 20 units. The small blind is half a unit, and the big blind is one unit. Each street allows two raises after the opener. There are no all-ins or side pots.</p></details>
+      </div>
+      <div class="admission">
+        <form id="create-form" class="panel">
+          <h2>Create a room</h2>
+          <label for="bet-unit">Bet unit</label>
+          <select id="bet-unit" name="bet_unit">
+            <option>2</option><option>4</option><option>6</option><option>8</option><option selected>10</option>
+            <option>12</option><option>14</option><option>16</option><option>18</option><option>20</option>
+          </select>
+          <dl class="preview"><div><dt>Starting stack</dt><dd id="preview-stack">200</dd></div><div><dt>Blinds</dt><dd id="preview-blinds">5 / 10</dd></div><div><dt>Bet increment</dt><dd id="preview-increment">10</dd></div></dl>
+          <button class="primary" type="submit">Create room</button>
+        </form>
+        <form id="join-form" class="panel">
+          <h2>Join a room</h2>
+          <label for="room-input">Room code</label>
+          <div class="join-row">
+            <input id="room-input" name="room_code" type="text" maxlength="128" required autocomplete="off" spellcheck="false" autocapitalize="none">
+            <button type="submit">Join room</button>
+          </div>
+        </form>
+      </div>
+    </section>
+    <section id="game" class="game" aria-labelledby="game-title" hidden>
+      <div class="game-top">
+        <div><p class="eyebrow" id="game-meta"></p><h1 id="game-title" tabindex="-1">Private table</h1></div>
+        <div class="session-tools">
+          <div class="room-id"><span>Room code</span><code id="room-code"></code><button id="copy-code" type="button">Copy</button></div>
+          <button id="leave" class="quiet" type="button">Leave table</button>
+        </div>
+      </div>
+      <div id="waiting" class="panel waiting" hidden>
+        <h2>Waiting for opponent</h2>
+        <p>Share the room code with a friend. The first turn starts when both players are connected.</p>
+      </div>
+      <div id="table-layout" class="table-layout" hidden>
+        <div class="felt" aria-label="Poker table">
+          <section class="seat" id="opponent" aria-labelledby="opponent-name">
+            <div class="seat-label"><h2 id="opponent-name">Opponent</h2><span id="opponent-markers"></span></div>
+            <div id="opponent-stack" class="chips"></div>
+            <div class="cards" id="opponent-cards" aria-label="Opponent cards"></div>
+          </section>
+          <section class="community" aria-label="Community cards and pot">
+            <div class="pot"><span>Pot</span> <strong id="pot"></strong></div>
+            <div class="cards" id="board" aria-label="Community cards"></div>
+          </section>
+          <section class="seat" id="you" aria-labelledby="your-name">
+            <div class="cards" id="your-cards" aria-label="Your cards"></div>
+            <div class="seat-label"><h2 id="your-name">You</h2><span id="your-markers"></span></div>
+            <div id="your-stack" class="chips"></div>
+          </section>
+        </div>
+        <aside class="rail" aria-label="Table status and actions">
+          <section class="panel turn">
+            <p id="lifecycle" class="eyebrow"></p>
+            <h2 id="turn-status" role="status">Connecting</h2>
+            <div class="clock" id="turn-clock" aria-label="Turn time remaining" hidden></div>
+            <p id="presence"></p>
+            <div id="grace" hidden><p id="grace-a" hidden></p><p id="grace-b" hidden></p></div>
+            <p id="automatic" hidden></p>
+          </section>
+          <section id="result" class="panel result" aria-labelledby="result-title" hidden>
+            <h2 id="result-title"></h2><p id="result-detail"></p>
+          </section>
+          <section class="panel controls">
+            <h2>Actions</h2>
+            <p id="action-status" role="status"></p>
+            <div class="action-grid" id="actions">
+              <button type="button" data-action="fold">Fold</button>
+              <button type="button" data-action="check">Check</button>
+              <button type="button" data-action="call">Call</button>
+              <button type="button" data-action="bet">Bet</button>
+              <button type="button" data-action="raise">Raise</button>
+              <button type="button" data-action="ready" class="primary">Ready</button>
+            </div>
+          </section>
+        </aside>
+      </div>
+      <button id="reconnect" type="button" hidden>Reconnect</button>
+    </section>
+    <dialog id="leave-dialog" aria-labelledby="leave-title">
+      <form method="dialog">
+        <h2 id="leave-title">Leave this table?</h2>
+        <p>Leaving a live match starts your disconnect grace period and may result in a forfeit. This tab will clear its saved seat.</p>
+        <div class="dialog-actions"><button value="stay" autofocus>Stay</button><button value="leave">Leave table</button></div>
+      </form>
+    </dialog>
+  </main>
+</body>
+</html>
