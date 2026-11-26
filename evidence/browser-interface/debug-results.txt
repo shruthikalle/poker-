@@ -1,0 +1,17 @@
+Initial Chromium acceptance symptom
+Chromium 140.0.7339.16
+playwright._impl._errors.TimeoutError: Locator.wait_for: Timeout 30000ms exceeded.
+  - waiting for get_by_role("heading", name="Waiting for opponent") to be visible
+
+Separate browser DOM diagnostic
+Connecting
+Illegal invocation
+
+The room admission succeeded and the server accepted the WebSocket.
+The browser UI remained at Connecting while the watchdog setup threw.
+The captured failure ended while waiting for the authenticated waiting-room heading.
+
+After binding scheduling and cancellation to the browser global, Chromium reported
+PASS showdown
+PASS recovery
+PASS replay

@@ -43,7 +43,8 @@ export async function admit(kind, input) {
 
 export class GameplayConnection {
   constructor({pageURL, token, onStatus, onFrame, Socket = WebSocket,
-    schedule = setTimeout, cancel = clearTimeout}) {
+    schedule = (callback, delay) => globalThis.setTimeout(callback, delay),
+    cancel = handle => globalThis.clearTimeout(handle)}) {
     Object.assign(this, {pageURL, token, onStatus, onFrame, Socket, schedule, cancel});
     this.state = "idle";
     this.generation = 0;
@@ -63,7 +64,13 @@ export class GameplayConnection {
     if (this.socket || this.retry !== null) return;
     const generation = ++this.generation;
     this.status(this.attempt ? "reconnecting" : "connecting");
-    const socket = new this.Socket(socketURL(this.pageURL));
+    let socket;
+    try {
+      socket = new this.Socket(socketURL(this.pageURL));
+    } catch {
+      this.status("offline");
+      return;
+    }
     this.socket = socket;
     const current = callback => event => {
       if (this.socket === socket && this.generation === generation) callback(event);

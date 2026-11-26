@@ -179,3 +179,27 @@ test("socket authority, stale generation, bounded reconnect and replacement", ()
   conn.halt();
   assert.equal(conn.socket, null);
 });
+
+test("default scheduling preserves the browser global receiver", {concurrency: false}, () => {
+  const originalSet = globalThis.setTimeout;
+  const originalClear = globalThis.clearTimeout;
+  try {
+    globalThis.setTimeout = function () {
+      assert.equal(this, globalThis);
+      return 42;
+    };
+    globalThis.clearTimeout = function (id) {
+      assert.equal(this, globalThis);
+      assert.equal(id, 42);
+    };
+    const conn = new GameplayConnection({
+      pageURL: "http://example.test/", token: "fixture-token", Socket: FakeSocket,
+      onStatus: () => {}, onFrame: () => {},
+    });
+    conn.connect();
+    conn.halt();
+  } finally {
+    globalThis.setTimeout = originalSet;
+    globalThis.clearTimeout = originalClear;
+  }
+});
