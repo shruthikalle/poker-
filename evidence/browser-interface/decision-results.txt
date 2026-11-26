@@ -1,0 +1,7 @@
+Controlled engine-only filter:
+  paused: rendered active at lifecycle revision 2
+  active: rendered active at lifecycle revision 2
+Production revision pair:
+  paused: rendered paused at lifecycle revision 3
+  active: rendered active at lifecycle revision 4
+One callback at 12341 ms: callback counter 29000 ms; monotonic anchor 17659 ms

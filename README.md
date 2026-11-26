@@ -2,7 +2,7 @@
 
 A browser-based, two-player Texas Hold'em game using **virtual chips only**. One player creates a private room and shares its code; the other joins from a second browser. The server owns the deck, rules, timers, and game state. Each browser receives only the information that player is allowed to see.
 
-The integrated development app runs the existing configurable-bet-unit engine through showdown and subsequent hands. Both HTTP admission contracts and both WebSocket lobby formats use one room per running app. Player B's admission initializes the first hand. Day 2 adds a headless gameplay socket with personalized views, action and Ready commands, revisions, and replay protection. Day 3 adds server-authoritative turn timers, pause/resume, reconnect grace, and distinct match-forfeit and no-winner outcomes. The browser remains planned.
+The integrated development app runs the existing configurable-bet-unit engine through showdown and subsequent hands. Both HTTP admission contracts and both WebSocket lobby formats use one room per running app. Player B's admission initializes the first hand. Day 2 adds a headless gameplay socket with personalized views, action and Ready commands, revisions, and replay protection. Day 3 adds server-authoritative turn timers, pause/resume, reconnect grace, and distinct match-forfeit and no-winner outcomes. The browser plays and observes the complete match using the same server and protocol.
 
 Team: Srishruthik Alle and Deepthi Morusupalli, CS 378 Agentic Software Engineering.
 
@@ -81,7 +81,7 @@ and expired gameplay authority. Seat identity is derived from possession
 of the token, so token theft remains outside this contract. R8 has
 current-socket and competing-command checks. C4–C6 have gameplay,
 settlement, and recovery privacy checks, including terminal forfeits
-and flop/turn/river disclosure. The browser demonstration remains open. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store actual fixture files and runnable tests with the code.
+and flop/turn/river disclosure. The browser suite exercises two independent sessions, betting and street progression, payouts, Ready, refresh, timeout, reconnect, and terminal privacy. The finite fixtures leave broader rule sequences outside that verification. Use a fixed deck, deterministic room-code generator, fake WebSocket clients, and a controllable clock. Store actual fixture files and runnable tests with the code.
 
 ### Common fixture
 
@@ -163,26 +163,55 @@ The project began as a new codebase. The combined lockfile includes the followin
 - Persistent socket tasks use [AnyIO 4.16.0](https://pypi.org/project/anyio/4.16.0/), now a direct dependency at the previously locked version.
 - The rules reference uses standard poker terminology. [WSOP rules](https://www.wsop.com/poker-games/texas-holdem/rules/)
 
-The original engine and tests were built with Codex under Srishruthik's direction. Deepthi's Day 1 work added the configurable room API, private session tokens, and first-hand initialization. Srishruthik's later server work added the lobby API, connection tracking, and socket replacement. Deepthi's Day 2 work extends that persistent socket with queued gameplay delivery, the coordinator, private views, and headless integration tests. Day 3 extends that same coordinator with timers, gameplay presence, and recovery. Actual partner and agent contributions will be identified in the final slides and repository history.
+The original engine and tests were built with Codex under Srishruthik's direction. Deepthi's Day 1 work added the configurable room API, private session tokens, and first-hand initialization. Srishruthik's later server work added the lobby API, connection tracking, and socket replacement. Deepthi's Day 2 work extends that persistent socket with queued gameplay delivery, the coordinator, private views, and headless integration tests. Day 3 extends that same coordinator with timers, gameplay presence, and recovery. Deepthi added the browser interface and its real two-session tests using the existing engine, admission, and gameplay protocol. Actual partner and agent contributions will be identified in the final slides and repository history.
 
 ## Setup and demo
 
-Use Python 3.13 and uv. No external accounts or credentials are required to run the local app and tests.
+From a clean checkout, install the locked dependencies and start the server.
 
 ```sh
 uv sync --locked
-uv run --locked python -m unittest discover -s tests -v
 uv run --locked uvicorn poker.server:create_app --factory --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
 ```
 
-`server.main:app` also serves both admission contracts. Run one app entry point per server. Start with an empty process for each smoke run. In a second terminal, run the Day 1 smoke script or the integration smoke script.
+1. Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/) in a browser.
+2. Choose a bet unit and select **Create room**. Copy the displayed room code.
+3. In a separate window or tab opened independently, enter the same URL and join with the code. An independent private window or another browser profile also works. A duplicated tab may inherit the original seat.
+4. Play using the enabled action buttons, then select **Ready** after a hand. The dealer rotates when both players are ready.
+5. Refresh to recover the current seat and hand. Leaving an active table starts the server's disconnect grace period where applicable. Restart the local server to start a different match after completion.
+
+The browser uses local HTML, CSS, and native JavaScript modules. The
+runtime needs no Node.js, browser build step, credentials, or external
+assets. Clock display is an estimate based on the last server sample
+and the browser's monotonic clock. The server enforces all deadlines.
+Forfeit and both-absent results show the outstanding pot as unawarded.
+The browser hides historical presence on terminal screens.
+
+### Browser verification
+
+Use Node.js 22 or later for the built-in JavaScript test runner
+(Node 26.7.0 verified). The optional browser group uses [Playwright
+1.55.0](https://pypi.org/project/playwright/1.55.0/) with its matching
+Chromium build. Browser processes and Node.js are development-only.
 
 ```sh
-uv run --locked python evidence/deepthi-day-1/smoke.py
-uv run --locked python evidence/integration-day1-day3/smoke.py
+uv run --locked python -m unittest discover -s tests -v
+uv run --locked python -W error -m unittest discover -s tests -v
+node --test tests/browser/client.test.mjs
+uv sync --locked --group browser
+uv run --locked --group browser playwright install chromium
+uv run --locked --group browser python evidence/browser-interface/browser_smoke.py
+node evidence/browser-interface/decisions.mjs
 ```
 
-The first Uvicorn command above is the canonical application launch.
+The browser suite starts its own fresh loopback server for each
+scenario. Add `--screenshots /path/to/output` to capture fresh evidence.
+On Linux systems missing Chromium system libraries, Playwright documents
+`playwright install --with-deps chromium`.
+
+### Wire-level fixture checks
+
+The Uvicorn command above is the canonical application launch.
 Canonical admission uses `/api/rooms` and `/api/rooms/join`.
 Compatibility paths and the exact wire contract are in
 [docs/protocol.md](docs/protocol.md). Gameplay clients send
@@ -234,6 +263,7 @@ curl -sS -H 'Content-Type: application/json' -d '{"room_code":"ROOM_CODE"}' http
 - [poker/rooms.py](poker/rooms.py) owns room state, admission, credentials, and initial hand creation.
 - [poker/server.py](poker/server.py) serves both HTTP and WebSocket contracts. [server/connections.py](server/connections.py) tracks lobby sockets by seat. [server/sessions.py](server/sessions.py) maps the older lobby API to the same room.
 - [docs/protocol.md](docs/protocol.md) describes both current contracts and the gameplay decisions still open.
+- [Browser evidence and reproduction steps](evidence/browser-interface/notes.md) cover two-player gameplay, recovery, privacy, and frontend decisions.
 - [Day 3 evidence and reproduction steps](evidence/deepthi-day-3/notes.md) cover timer boundaries, recovery, and the replay fix.
 - [Day 2 evidence and reproduction steps](evidence/deepthi-day-2/notes.md) cover gameplay, privacy, and coordination.
 - [Day 1 baseline](evidence/deepthi-day-1/baseline.txt) and [Day 1 results](evidence/deepthi-day-1/test-results.txt) preserve the original checks. The [integration notes](evidence/integration-day1-day3/notes.md) and [integration results](evidence/integration-day1-day3/test-results.txt) record the combined validation and joint decisions.
@@ -243,8 +273,7 @@ curl -sS -H 'Content-Type: application/json' -d '{"room_code":"ROOM_CODE"}' http
 The game supports heads-up play only, one active room per server process, fixed-size bets, and no all-ins or side pots. A player who cannot afford a call must fold. These are explicit scope choices; we will record any later change and why we made it.
 
 
-Day 3 supports headless gameplay and timed recovery over one in-memory
-server process. The browser, persistence, and a room reset endpoint remain
-future work. Replay outcomes expire after the previous hand. Rejected
+The browser and headless clients share one in-memory room per server
+process. Persistence and a room reset endpoint remain future work. Replay outcomes expire after the previous hand. Rejected
 outcomes also expire when their FIFO is full. Accepted commands remain
 protected while their hand is retained.

@@ -286,3 +286,46 @@ use a manual clock and the live smoke fixture uses shorter durations.
 
 The configurable poker rules are preserved and the final joint rules and
 forfeit-specification approval remains pending.
+
+
+## Browser client
+
+FastAPI serves the browser at `/` and only the frontend directory under
+`/assets`. HTTP and WebSocket URLs are derived from the page origin.
+The gameplay authentication, actions, Ready, and recovery schemas above
+also serve the browser. The only shared server interface addition is
+static routing. No engine or wire message changed.
+
+The browser requires an authenticated snapshot before enabling gameplay.
+It discards a snapshot if either engine `revision` or
+`lifecycle_revision` regresses. Each server field is monotonic within
+the room. If both stay equal the arrival can refresh the clock sample.
+The current WebSocket generation alone may publish state. A terminal
+snapshot remains terminal for that browser session.
+
+The browser stores seat, room code, bet unit, token, and any unresolved
+wire command in per-tab `sessionStorage`. It keeps no snapshots or cards
+there. This permits refresh recovery and protects against unrelated tabs
+overwriting each other's session records. Same-origin scripts and browser
+developer tools can read the token. A duplicated tab may inherit it.
+When replaced, the tab stops automatic reconnect attempts. A manual
+reconnect is an explicit choice to reclaim that seat. Leaving clears the
+saved session and can trigger ordinary disconnect expiry.
+
+Each seat's tab sends at most one unresolved mutation at a time. A success
+acknowledgment waits for a snapshot at or beyond its outcome revision.
+A rejection requests a snapshot and requires a deliberate new action.
+If delivery is ambiguous, the client resends the exact stored payload on
+a newly authenticated current connection after synchronizing. It retires
+a pending command when it observes a hand outside server replay retention.
+It never changes a pending action ID or claims a successful send committed
+the engine mutation. Server replay and revision enforcement remain
+authoritative.
+
+Turn and grace presentation use elapsed `performance.now()` time from
+the latest sampled snapshot. A paused turn retains its sampled amount.
+The browser requests a fresh snapshot on visibility return and never
+sends an automatic fold or forfeit. A sampled countdown may lag the
+server by network transit time and browser scheduling. Terminal views
+hide the historical presence record and render the server's match result
+separately from a settled hand result.
