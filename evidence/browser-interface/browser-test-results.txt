@@ -1,0 +1,14 @@
+$ uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --screenshots evidence/browser-interface/screenshots
+Chromium 140.0.7339.16
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors

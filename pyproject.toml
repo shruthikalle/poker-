@@ -20,6 +20,9 @@ build-backend = "hatchling.build"
 packages = ["poker", "server"]
 
 [dependency-groups]
+browser = [
+    "playwright==1.55.0",
+]
 dev = [
     "httpx2>=2.16.2",
 ]
