@@ -7,6 +7,7 @@
   <title>Heads-Up Live Poker</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./assets/styles.css">
+  <script type="module" src="./assets/js/app.mjs"></script>
 </head>
 <body>
   <header class="site-header">
@@ -78,6 +79,7 @@
             <p id="lifecycle" class="eyebrow"></p>
             <h2 id="turn-status" role="status">Connecting</h2>
             <div class="clock" id="turn-clock" aria-label="Turn time remaining" hidden></div>
+            <progress id="turn-progress" aria-label="Turn time estimate" max="30000" value="0" hidden></progress>
             <p id="presence"></p>
             <div id="grace" hidden><p id="grace-a" hidden></p><p id="grace-b" hidden></p></div>
             <p id="automatic" hidden></p>

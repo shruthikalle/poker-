@@ -92,3 +92,4 @@ dialog::backdrop { background: #070e0bc9; }
   .join-row, .action-grid { grid-template-columns: 1fr; }
   .preview { flex-wrap: wrap; }
 }
+progress { display: block; width: 100%; height: .45rem; margin-bottom: .75rem; accent-color: var(--gold); }
