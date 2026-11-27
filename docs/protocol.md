@@ -1,7 +1,6 @@
 # Multiplayer integration contract
 
-The README describes the implemented poker rules. The target draft proposes a different contract. [Target rules](rules.md) The application owns admission,
-seat credentials, transport, and future match coordination. The engine owns
+The application owns admission, seat credentials, transport, and match coordination. See the [implemented rules](rules-reconciliation.md) and [alternative draft](rules.md). The engine owns
 the authoritative immutable state and transitions for a poker hand. The browser
 renders the server's views and submits requests.
 
@@ -21,9 +20,7 @@ the creator and B to the joiner, then authenticates future commands against
 the separate private token issued to that seat. Creation leaves the hand
 absent. A per-app lock serializes creation, guest allocation, first-hand
 initialization, and authentication reads. B's session and the engine state
-are published together after initialization succeeds. The bet unit is fixed
-at creation, a conservative choice within the README's requirement to choose
-it before B joins.
+are published together after initialization succeeds. Creation fixes the bet unit before the guest joins.
 
 The engine settles showdown and folds. A paid showdown has
 `phase="showdown"` and a zero pot. At showdown, `winner=None` means a tie.

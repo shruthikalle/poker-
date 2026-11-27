@@ -1,19 +1,6 @@
-# Proposed rules documentation replacement
+# Implemented poker rules
 
-Joint approval is pending. The engine and its existing tests govern this
-branch. If both partners approve, replace the body of `docs/rules.md` with the
-text under **Retained rules** below, remove this proposal file, and point the
-README's rules summary at `docs/rules.md`. In README, replace the paragraph
-under **Implemented rules and target draft** with:
-
-> This is a deliberately simplified heads-up fixed-limit poker variant.
-> The configurable rules below describe the engine and its tests.
-> [Agreed rules](docs/rules.md)
-
-Rename that heading to **Implemented rules**. The earlier proposal remains
-available in Git at `e65f0c2`.
-
-## Retained rules
+This document describes current behavior. The alternative rules in [the draft](rules.md) and interrupted-pot policy remain pending joint approval.
 
 Two players share one active room per process. The host chooses an even
 integer bet unit between 2 and 20 inclusive. Each starts with 20 times that
@@ -35,6 +22,4 @@ the button. The match ends if a seat cannot post the full big blind while
 retaining one chip. Otherwise both players choose Ready before starting
 the next hand with the settled stacks and the rotated button.
 
-The 30-second turn and 20-second reconnect grace periods are future
-server milestones. Their deadline and recovery details require joint
-approval.
+The server enforces a 30-second turn and a 20-second reconnect grace period. See the [timing and recovery contract](protocol.md#timing-and-recovery).

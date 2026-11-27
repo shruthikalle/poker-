@@ -6,11 +6,11 @@ and the current interrupted-pot behavior.
 
 | Topic | Evidence |
 | --- | --- |
-| Requirements, discrepancies, and owners | [Matrix](requirements-matrix.md), [discrepancies](specification-discrepancies.md), [joint approval](joint-decisions.md), [contributions and dependencies](contribution-inventory.md) |
+| Requirements, discrepancies, and owners | [Matrix](requirements-matrix.md), [discrepancies](specification-discrepancies.md), [joint approval](../submission-readiness/joint-approval-status.md), [contributions and dependencies](../submission-readiness/contribution-inventory.md) |
 | Independent answers and regression output | [Arithmetic/card oracles](correctness-oracles.md), [baseline](baseline.txt), [test results](test-results.txt), [live smoke](regression-smoke-results.txt) |
 | Transport, privacy and resource bounds | [Three repeated transport runs](transport-and-resource-results.txt), [quality notes](test-quality-notes.md) |
 | Browser evidence | [Cross-engine output](browser-compatibility-results.txt), [history and suspension](browser-lifecycle-results.txt), [accessibility and zoom](accessibility-results.txt), [unexecuted manual checks](manual-verification.md) |
-| Installation and demo | [Clean checkout and wheel](clean-checkout-results.txt), [rehearsal](demo-rehearsal-results.txt), [presentation handoff](presentation-handoff.md) |
+| Installation and demo | [Clean checkout and wheel](clean-checkout-results.txt), [live fixture output](demo-rehearsal-results.txt) |
 | Engineering evidence | [Reproduced comparisons](engineering-comparisons.txt), [earlier debugging evidence](../browser-interface/debug-results.txt), [reliability notes](../browser-reliability/notes.md) |
 
 ## Reproduction

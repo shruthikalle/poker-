@@ -1,11 +1,9 @@
 # Requirements and verification
 
 The G, R, T, and C identifiers come from the implemented contract in
-[README](../../README.md). The [protocol](../../docs/protocol.md) defines
+[known-answer cases](../../docs/verification.md). The [protocol](../../docs/protocol.md) defines
 transport behavior. The incompatible [target draft](../../docs/rules.md)
 and [reconciliation](../../docs/rules-reconciliation.md) remain open.
-The original proposal, source PDF, and official submission instructions
-were absent from the tracked tree and available branch history.
 
 Owners are Deepthi for application and transport, Srishruthik for engine
 behavior, and both for rule changes and final approval. A joint audit
@@ -75,10 +73,5 @@ the README requirement IDs intact.
 | Audit H | History return must synchronize before actions. | Deepthi, browser `GameplayConnection` and `app` lifecycle handlers. | [Browser audit](browser_audit.py) `history`, `history-offline`, and `suspension`. | Partial. Real Chromium cache and Firefox/WebKit reload covered. |
 | Audit J | Keyboard, error association, zoom and physical accessibility. | Deepthi, browser `app`, `render`, forms. | [Browser audit](browser_audit.py) `forms`, `input`, `zoom`; [manual verification](manual-verification.md). | Partial. No interactive screen reader or physical device test. |
 | Audit N | Fresh locked install and isolated wheel launch. | Deepthi, [pyproject](../../pyproject.toml), static mount. | [Clean checkout results](clean-checkout-results.txt); `browser_audit.py --case installed`. | Verified. |
-| Audit C1 | Agree final target or retained poker rules. | Both. | [Open decisions](joint-decisions.md). | Pending joint approval. |
-| Audit C2 | Agree how disconnect interruption treats the pot. | Both. | T and H prove present behavior; [approval checklist](joint-decisions.md). | Pending joint approval. |
-| Audit R/S | Agree presentation selections and rehearse together. | Both. | [Handoff](presentation-handoff.md). | Pending joint approval. |
-| Audit B/R | Review the actual source PDF, proposal, and official delivery instructions. | Both. | Tracked files and all accessible Git refs inspected. | Blocked by missing source. |
-
-Across 44 mapped rows there are 33 verified, 4 partial, 3 partner-owned,
-3 pending joint approval, and 1 blocked by missing source.
+| Audit C1 | Agree final target or retained poker rules. | Both. | [implemented wording](../submission-readiness/joint-approval-status.md). | Pending joint approval. |
+| Audit C2 | Agree how disconnect interruption treats the pot. | Both. | T and H prove present behavior; [interrupted-pot contract](../submission-readiness/joint-approval-status.md). | Pending joint approval. |

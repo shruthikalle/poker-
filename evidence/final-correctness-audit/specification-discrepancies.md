@@ -1,10 +1,9 @@
 # Specification discrepancies
 
-The [implemented table in README](../../README.md) and [wire contract](../../docs/protocol.md)
+The [implemented rules](../../docs/rules-reconciliation.md) and [wire contract](../../docs/protocol.md)
 govern the application checks. The [target draft](../../docs/rules.md)
 records a different variant selected by one contributor from a PDF.
-The PDF and original proposal were unavailable in the repository and
-its visible branch history. The [reconciliation](../../docs/rules-reconciliation.md)
+The [reconciliation](../../docs/rules-reconciliation.md)
 is explicitly pending. Its language about timing as future work reflects
 when it was written. The current timing contract is already live.
 
@@ -19,4 +18,4 @@ when it was written. The current timing contract is already live.
 | Disconnect settlement | Terminal result is independent of the hand. Earlier fulfilled payout survives. Interrupted stacks and pot remain where they were, with no unauthorized reveal. | Exact grace tests and live forfeit/both-absent reports. Both decide retention or a new policy. |
 | R7 token ownership | A valid token authenticates its seat. The server has no separate identity with which to reject a bearer who possesses the other seat's token. | Backend auth and replacement tests. Clarify README bearer interpretation; credential theft is outside the threat model. |
 | C4 cards in the README | Actual browser fixture uses A `9h 5h`, B `Ts 3c`. The README privacy example lists different cards. | Packet and DOM checks use the real fixture and the same privacy invariant. |
-| Ownership descriptions | Historical plans differ. Git history records Srishruthik's engine, table API and lobby work and Deepthi's browser, transport, and testing work. | Preserve old planning records and use the [contribution inventory](contribution-inventory.md) for current attribution. |
+| Ownership descriptions | Historical plans differ. Git history records Srishruthik's engine, table API and lobby work and Deepthi's browser, transport, and testing work. | Preserve old planning records and use the [software provenance](../submission-readiness/contribution-inventory.md) for current attribution. |

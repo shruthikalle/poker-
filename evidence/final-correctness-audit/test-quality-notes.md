@@ -65,8 +65,6 @@ Targeted source inspection and text scans excluded raw packet dumps.
 The scan found zero candidates for literal recovery headers, long
 Bearer values, private-key delimiters, or known API-token prefixes
 in the tracked documentation and evidence plus the new audit files.
-The tracked tree and available branch paths contained no proposal PDF,
-course handout, homework data, or official submission instructions.
 Actual browser probes compare credential values in memory and retained
 only sanitized status lines. The role and DOM checks used known cards;
 the wire checks captured live personalized frames before and after

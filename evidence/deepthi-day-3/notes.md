@@ -1,7 +1,7 @@
-# Day 3 engineering evidence
+# Authoritative deadline and replay evidence
 
 The project started at `c29badee2f21e6542c67a176304460b14cea13b6`.
-Day 3 started at local and remote `92c9f2991242a9245e929c10b3a0f33ca0372413`.
+The timer work began at `92c9f2991242a9245e929c10b3a0f33ca0372413`.
 Both baseline suites passed 83 tests, as did the existing set of five live
 scenarios. Srishruthik's earlier engine and lobby work remains in the
 history. Deepthi directed Codex to implement the replay fix, authoritative
@@ -12,7 +12,7 @@ await joint approval. [Baseline](baseline.txt) · [Rules reconciliation](../../d
 
 ## Replay debugging and regression
 
-After 256 validly formed but stale commands from one seat, the Day 2
+After 256 validly formed but stale commands from one seat, the previous
 coordinator returned `REPLAY_CAPACITY` for the next legal call. The
 unchanged revision and 15-chip pot showed the engine transition had not
 run. The shared pre-dispatch capacity check counted both accepted and

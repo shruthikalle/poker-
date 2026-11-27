@@ -3,8 +3,7 @@
 VoiceOver is installed on the audit host. The tool environment did not
 provide an interactive desktop or audible assistive output. No system
 accessibility settings were changed. Browser accessibility snapshots
-and keyboard checks were executed. The official course instructions
-were unavailable for checking any course-specific accessibility claim.
+and keyboard checks were executed.
 
 ## Screen reader with keyboard
 

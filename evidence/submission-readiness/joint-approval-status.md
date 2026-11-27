@@ -1,8 +1,6 @@
 # Proposed final wording for joint review
 
-Deepthi confirmed during finalization that explicit joint approval of
-both rules and interrupted-pot handling is pending. The following
-describes the runtime to preserve while both partners review it.
+Joint approval of changes to the rules and interrupted-pot handling is pending. The following describes current runtime behavior.
 
 ## Tested rules
 
@@ -55,7 +53,6 @@ terminal state and cannot reopen it.
   and the next-blind exhaustion rule.
 - Accept the above interrupted-pot wording or jointly define a change
   and its accounting, privacy, and test obligations.
-- Agree on contribution wording and the joint rehearsal.
 
 [Engine](../../poker/engine.py) · [Timers](../../server/timers.py) ·
 [Protocol](../../docs/protocol.md) · [Target draft](../../docs/rules.md) ·

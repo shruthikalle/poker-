@@ -1,11 +1,6 @@
-# Day 1 engineering notes
+# Room and socket foundation
 
-The coding agent was asked to build and commit the real-time foundation in
-validated milestones. The brief covered baseline inspection, the engine
-boundary, room concurrency and seat identity, FastAPI admission, optional
-WebSocket authentication, and reproducible tests and evidence. The
-README supplied the agreed rules and the original engine tests supplied the
-baseline. The engine and its tests remained outside the edit scope.
+This checkpoint introduced the HTTP room boundary and one-time socket authentication.
 
 ## Decisions and checks
 
@@ -65,24 +60,7 @@ uv run --locked uvicorn poker.server:create_app --factory --host 127.0.0.1 --por
 In a second terminal run `uv run --locked python evidence/deepthi-day-1/smoke.py`.
 The health request passes and the room request fails with 404. Stop
 the first server with Ctrl-C. Start the current server from the repository
-with the [README launch command](../../README.md#setup-and-demo) and run the
+with the [README launch command](../../README.md#setup) and run the
 same script again. The admission and socket assertions pass. The script
 prints methods, paths, statuses, and seat status only. The captured output
 is in [test-results.txt](test-results.txt).
-
-## Integration handoff
-
-Use `new_game` for initial admission and keep the returned engine state
-server-side. The existing engine exposes `legal_actions` and `apply_action`
-for the next transport milestone. Coordinate showdown result fields and
-a next-hand API that carries stacks and alternates the button with
-Srishruthik. Agree which grace deadline applies when disconnects overlap.
-See the [protocol](../../docs/protocol.md) for proposed messages,
-personalized views, revisions, acknowledgments, and timer ordering.
-
-Day 1 is a local, single-worker, in-memory run. Process exit clears the room.
-The two seats can authenticate using their original tokens for a one-time
-status snapshot. Connection ownership, token expiration, snapshots with
-cards, timers, action submission, Ready, and reconnect recovery remain
-future work. A browser gameplay demo depends on those components and the
-partner's showdown and next-hand implementation.

@@ -1,15 +1,15 @@
-# Day 1 / Day 3 integration
+# Engine and admission integration
 
 | Input | Commit |
 | --- | --- |
-| Deepthi's Day 1 branch | `5dc015ceaee057b77c3b98a9313f7778a5da1c7c` |
+| Canonical admission branch | `5dc015ceaee057b77c3b98a9313f7778a5da1c7c` |
 | Srishruthik's Days 1–3 on `origin/main` | `0f48df7af44e24e8dfb472bd16e0ef8c82bf923d` |
 | Common ancestor | `34aa2414ff9bc3841e5441cb58ea806d96008313` |
 | Integration merge | `b119fc20c0f823af76148bbbd33097d650a2d4f6` |
 
-Before the Day 1 push, `git ls-remote --heads origin` listed only `main`.
+Before the admission branch was published, `git ls-remote --heads origin` listed only `main`.
 The partner's five commits after the common ancestor were already reachable
-from that branch. The Day 1 suite passed 29 tests before its branch was
+from that branch. The admission suite passed 29 tests before its branch was
 pushed and verified against the local SHA. The integration merge has both
 input commits as parents.
 
@@ -19,7 +19,7 @@ input commits as parents.
 | --- | --- |
 | `README.md` | Deepthi added room and status behavior, launch instructions, and evidence. Srishruthik described the settled engine, lobby, and forward-looking rules and responsibilities. The merged README describes the implemented behavior, preserves the original fixtures with the updated showdown expectations, and identifies the draft rules and ownership decisions. |
 | `docs/protocol.md` | Both partners added a protocol with different HTTP routes, WebSocket authentication forms, snapshots, and action replay proposals. The merged contract documents both implemented lobby formats over the shared room and records the unresolved gameplay schema decisions. |
-| `pyproject.toml` | Deepthi added the newer FastAPI and Uvicorn stack, Pydantic, websockets, and HTTPX2. Srishruthik added Treys, pinned the older FastAPI and Uvicorn stack with HTTPX for tests, and packaged `server`. The combined project packages both modules, includes Treys, and retains the Day 1 transport and supported test backend. |
+| `pyproject.toml` | Deepthi added the newer FastAPI and Uvicorn stack, Pydantic, websockets, and HTTPX2. Srishruthik added Treys, pinned the older FastAPI and Uvicorn stack with HTTPX for tests, and packaged `server`. The combined project packages both modules, includes Treys, and retains the canonical transport and supported test backend. |
 | `uv.lock` | Both branches had generated different dependency sets. uv regenerated the lock from the merged declarations. `uv sync --locked` and the lock check passed. |
 
 `poker/engine.py`, `poker/__init__.py`, `server/connections.py`, and the
@@ -42,7 +42,7 @@ original tests and assertions remain.
   identity lookup, coded errors, and default-unit creation. Either join path
   updates lobby subscribers. Combined regression tests run each creation
   path against the other join path and test shared room capacity.
-- **Two WebSocket contracts.** Day 1 clients still receive a one-time
+- **Two WebSocket contracts.** One-time status clients still receive a one-time
   `room_status` after an `authenticate` frame. Lobby clients receive
   personalized `lobby` broadcasts after an `auth` frame and retain
   replacement, connection flags, and ping/pong. Only lobby sockets
@@ -104,26 +104,3 @@ The Unicode failure uses the same exported snapshot. Create an empty
 lobby app with `server.main.create_app`, then send `POST /api/table`
 and `POST /api/join` with `{"room_code":"café"}`. With exception
 propagation enabled, the second request raises the captured TypeError.
-
-## Decisions for both partners
-
-- Confirm the future owner split and the target rules. The draft changes
-  stack size, blind and bet-unit configurability, street increments, raise
-  cap, card burns, opponent affordability, tie odd-chip allocation, and
-  next-blind affordability. The combined runtime retains the existing
-  configurable engine and its independent tests.
-- Use the updated engine contract when designing gameplay. Ready is an
-  engine action that can be legal without an actor. Two Ready flags may
-  advance `hand_number`, rotate the button, and carry settled stacks
-  forward. A paid showdown has a zero pot and `winner=None` for a tie.
-  A fold has phase `finished`, and `match_winner` is distinct from the
-  hand winner. Serialize only explicit fields.
-- Agree on gameplay message names, whether transport derives its hand ID
-  from `hand_number`, revision names, replay scope and retention, and the
-  deadline for overlapping disconnects. Keep recorded acknowledgments
-  separate from current snapshots.
-
-The local lobby supports a single in-memory table. The transport currently
-stops at admission, a server-side first hand, and lobby status. Gameplay
-messages, timers, recovery deadlines, player-specific game views, and the
-browser remain future work.

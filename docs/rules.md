@@ -1,6 +1,6 @@
-# Day 1 target game rules
+# Alternative poker rules draft
 
-Status: target selected from the supplied PDF by Srishruthik on November 25, 2026. This is a shared draft for Deepthi and Srishruthik to review. The current engine has not yet been migrated.
+Status: unapproved alternative. See the [implemented variant](rules-reconciliation.md).
 
 ## Table, deal, and turn order
 
@@ -40,6 +40,6 @@ Known showdown oracle: board `Ah Kh Qh Jc 2d`, A `9h 5h`, B `Ts 3c`; A's flush b
 
 ## Migration and joint decisions
 
-The current `poker/engine.py` uses 200 chips, a configurable bet unit on every street, two raises, no burn cards, and odd chip to the button. Its 22 tests pass for those older rules. Deepthi must revise code and expected tests before it implements this contract.
+The current `poker/engine.py` uses 200 chips, a configurable bet unit on every street, two raises, no burn cards, and odd chip to the button. Its 22 tests pass for those older rules. Migration would require corresponding engine and fixture changes.
 
 Both partners should settle: (1) the exact terminal match result when a future blind cannot be paid; (2) final engine API and whether hand ID/revision are server-owned; (3) whether any host-configurable settings remain. This target uses fixed 500 chips and 5/10 blinds, so the old adjustable bet-unit room flow should not be assumed.

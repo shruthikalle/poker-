@@ -1,7 +1,7 @@
 # Reliability test matrix
 
 The G, R, T and C labels refer to the implemented-rule cases in the
-[README](../../README.md). Numerical browser fixtures use the currently
+[known-answer cases](../../docs/verification.md). Numerical browser fixtures use the currently
 implemented configurable bet unit. Exact deadline boundaries use an
 injected server clock. The browser checks use real sockets and focus on
 visible behavior and representative timing.

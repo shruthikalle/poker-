@@ -1,16 +1,4 @@
-# Day 2 engineering notes
-
-The repository began at `c29badee2f21e6542c67a176304460b14cea13b6`. Day 2
-started at local and remote main `eee3489c8675d770f9bc9ff0018584f4464d7dc1`.
-That tip contains the seven Deepthi Day 1 commits and Srishruthik's engine,
-lobby admission, and replacement-safe registry. Both baseline suites ran
-58 tests and passed. [Baseline capture](baseline.txt)
-
-Deepthi's Day 2 brief directed Codex to implement and validate the transport
-milestone, preserve the engine and earlier test assertions, and record
-the actual repository, test, and GitHub results. This branch uses the
-current configurable engine. The exact proposed rules reconciliation
-is ready for joint approval. [Rules reconciliation](../../docs/rules-reconciliation.md)
+# Authenticated gameplay evidence
 
 ## Known-answer hands
 
@@ -90,7 +78,7 @@ uv run --locked python -W error -m unittest discover -s tests -p test_coordinato
 
 The earlier integration's non-ASCII room-code 500, dependency warning,
 and event-loop stall artifacts remain available. The non-ASCII reproducer
-remains the simplest historical presentation story. [Day 1 integration debugging](../integration-day1-day3/notes.md)
+records a separate transport failure. [Day 1 integration debugging](../integration-day1-day3/notes.md)
 
 ## Historical feature comparison and live runs
 
@@ -106,17 +94,17 @@ uv run --locked uvicorn poker.server:create_app --factory --app-dir "$DAY2_EARLI
 In another terminal, run the current `smoke.py --scenario showdown`
 with uv as shown below. The old app returns `INVALID_MESSAGE` to the
 gameplay handshake and the script exits 1. Stop it, then start a fresh
-Day 2 fixture server for each check. The exact same command passes
-against Day 2.
+fixed-deck fixture server for each check. The exact same command passes
+against the gameplay implementation.
 
 ```sh
 uv run --locked python evidence/deepthi-day-2/smoke.py --scenario showdown
 ```
 
-[Launch and scenario commands](../../README.md#setup-and-demo) ·
+[Launch and scenario commands](../../README.md#setup) ·
 [Captured live results](smoke-results.txt) · [Combined suite output](test-results.txt)
 
-## Limits and handoff
+## Historical limits
 
 One process and one in-memory room. Gameplay has no clock, forfeits,
 timed recovery, or browser yet. Replacing a socket is supported.
@@ -126,9 +114,4 @@ exhausts 256 distinct command IDs in a hand loses the ability to submit
 new IDs for that hand. Sessions, decks, and replay outcomes are lost
 on process restart. The app uses local origin validation, private token
 authentication, and loopback for the documented local demo. Production
-deployment and rate limiting are outside this milestone.
-
-Before changing poker rules, obtain joint approval. For the next
-transport milestone, use a monotonic clock and apply timeout/reconnect
-callbacks within the same room boundary. Preserve the paid showdown
-and fold privacy behavior in every new message type.
+deployment and rate limiting are outside the deployment scope.
