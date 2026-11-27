@@ -1,0 +1,3 @@
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case rehearsal
+chromium 140.0.7339.16
+rehearsal: private admission → 210/190 showdown → Ready → pause (30s · paused) → resume; fresh fixture forfeit 195+190+15=400; 3.37s

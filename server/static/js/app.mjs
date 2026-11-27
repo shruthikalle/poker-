@@ -14,6 +14,7 @@ const state = {...restore(storage), snapshot: null, sampledAt: 0, status: "idle"
 let admission = state.session ? null : restoreAdmission(storage);
 let link;
 let admissionPending = false;
+let invalidAdmissionField = null;
 let recoveryAttempts = 0;
 let displayTimer = null;
 let lastTouch = null;
@@ -60,6 +61,16 @@ function draw() {
   }
   byId("admission-forms").hidden = Boolean(admission);
   byId("admission-recovery").hidden = !admission;
+  for (const id of ["bet-unit", "room-input"]) {
+    const field = byId(id);
+    if (id === invalidAdmissionField) {
+      field.setAttribute("aria-invalid", "true");
+      field.setAttribute("aria-errormessage", "notice");
+    } else {
+      field.removeAttribute("aria-invalid");
+      field.removeAttribute("aria-errormessage");
+    }
+  }
   if (admission) {
     byId("recovery-detail").textContent = admission.kind === "create"
       ? "Retry the original room creation to recover the host seat."
@@ -160,10 +171,14 @@ function requestMove(move) {
 function submitAdmission(event, kind) {
   event.preventDefault();
   if (admission || admissionPending || state.session) return;
-  const input = kind === "create" ? Number(byId("bet-unit").value) : byId("room-input").value.trim();
+  const field = kind === "create" ? "bet-unit" : "room-input";
+  const input = kind === "create" ? Number(byId(field).value) : byId(field).value.trim();
+  invalidAdmissionField = null;
   if (kind === "create" ? !validUnit(input) : !input || input.length > 128) {
+    invalidAdmissionField = field;
     state.notice = kind === "create" ? "Choose an even bet unit from 2 to 20." : "Enter a valid room code.";
     draw();
+    byId(field).focus();
     return;
   }
   try {
@@ -197,6 +212,7 @@ async function confirmAdmission() {
   } catch (error) {
     if (error instanceof AdmissionRejected) {
       admission = null;
+      if (error.invalidInput) invalidAdmissionField = kind === "create" ? "bet-unit" : "room-input";
       save();
     }
     state.notice = error.message;
@@ -210,6 +226,14 @@ async function confirmAdmission() {
 byId("retry-admission").addEventListener("click", confirmAdmission);
 byId("create-form").addEventListener("submit", event => submitAdmission(event, "create"));
 byId("join-form").addEventListener("submit", event => submitAdmission(event, "join"));
+for (const id of ["bet-unit", "room-input"]) {
+  byId(id).addEventListener("input", () => {
+    if (invalidAdmissionField !== id) return;
+    invalidAdmissionField = null;
+    state.notice = "";
+    draw();
+  });
+}
 byId("bet-unit").addEventListener("change", event => {
   const unit = Number(event.currentTarget.value);
   if (!validUnit(unit)) return;

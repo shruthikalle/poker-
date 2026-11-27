@@ -1,0 +1,24 @@
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case history --engine chromium
+chromium 140.0.7339.16
+history: landing=cache, active=cache, paused=cache, expired=cache, terminal=cache, waiting=cache
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case history --engine firefox
+firefox 141.0
+history: landing=reload, active=reload, paused=reload, expired=reload, terminal=reload, waiting=reload
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case history --engine webkit
+webkit 26.0
+history: landing=reload, active=reload, paused=reload, expired=reload, terminal=reload, waiting=reload
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case history-offline
+chromium 140.0.7339.16
+offline history: cache, navigator.onLine=True, initial status=Connected
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case pending-history
+chromium 140.0.7339.16
+pending history: reload (websocket), exact replay sent twice, one mutation and pot 20
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case suspension
+chromium 140.0.7339.16
+CDP freeze: countdown recovered 30s → 28s, no synthetic poker command, call applied once

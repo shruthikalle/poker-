@@ -46,7 +46,12 @@ export function validSession(value) {
     typeof value.session_token === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value.session_token);
 }
 
-export class AdmissionRejected extends Error {}
+export class AdmissionRejected extends Error {
+  constructor(message, invalidInput) {
+    super(message);
+    this.invalidInput = invalidInput;
+  }
+}
 
 export async function admit({kind, input, key}) {
   let response, data;
@@ -75,7 +80,10 @@ export async function admit({kind, input, key}) {
       "422:invalid request body": kind === "create"
         ? "Choose an even bet unit from 2 to 20." : "Enter a valid room code.",
     }[`${response.status}:${data?.detail}`];
-    if (message) throw new AdmissionRejected(message);
+    if (message) {
+      throw new AdmissionRejected(message, response.status === 404 ||
+        (response.status === 422 && data.detail === "invalid request body"));
+    }
     throw new Error(uncertain);
   }
   if (!validSession(data) || data.seat !== (kind === "create" ? "A" : "B")) {

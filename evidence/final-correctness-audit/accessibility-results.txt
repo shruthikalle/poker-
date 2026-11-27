@@ -1,0 +1,17 @@
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case forms
+Before the admission error association fix
+room-code feedback: focused field, aria-invalid=None, aria-errormessage=None
+AssertionError: Locator expected to have attribute 'true'
+
+After the fix. Correcting the room code also cleared the old association.
+chromium 140.0.7339.16
+room-code feedback: focused field, aria-invalid=true, aria-errormessage=notice
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case input
+input edges: held Enter submitted one check, focus moved to action status, deliberate touch Check and Bet both worked
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case zoom
+native Chromium tab zoom: 1.00×, CSS viewport 1440px
+native Chromium tab zoom: 1.50×, CSS viewport 960px
+native Chromium tab zoom: 2.00×, CSS viewport 720px
+native zoom: reflow, private card labels, focus, and keyboard call passed at 200%
