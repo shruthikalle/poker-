@@ -80,7 +80,8 @@ uv run --locked python evidence/deepthi-day-2/smoke.py --scenario showdown
 See the [known-answer cases](docs/verification.md),
 [other live smoke commands](evidence/browser-reliability/notes.md#reproduce),
 [technical evidence index](evidence/submission-readiness/evidence-manifest.md),
-and [software provenance](evidence/submission-readiness/contribution-inventory.md).
+[software provenance](evidence/submission-readiness/contribution-inventory.md),
+and the [browser interaction audit](evidence/application-quality/product-gap-inventory.md).
 
 ## Security and limits
 

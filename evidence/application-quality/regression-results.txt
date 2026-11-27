@@ -1,0 +1,135 @@
+Baseline: e11c9d42b92d406b0f83a3bbce316ee7d7f4234f (local and remote main)
+Python: 125 normal and 125 warnings-as-errors. JavaScript: 13.
+chromium scenarios passed: 12
+firefox scenarios passed: 12
+webkit scenarios passed: 12
+Day 1 smoke checks passed
+Integration smoke checks passed
+showdown gameplay smoke passed
+fold gameplay smoke passed
+tie gameplay smoke passed
+timeout-fold smoke passed
+timeout-check smoke passed
+reconnect smoke passed
+forfeit smoke passed
+both-absent smoke passed
+
+$ uv run --offline --locked python -m unittest discover -s tests
+
+$ uv run --offline --locked python -W error -m unittest discover -s tests
+
+$ node --test tests/browser/client.test.mjs
+
+$ uv lock --check --offline
+
+$ uvx --offline ruff==0.15.20 check .
+
+$ uvx --offline ruff==0.15.20 format --check .
+Ran 125 tests in 0.497s
+OK
+Ran 125 tests in 0.496s
+OK
+ℹ tests 13
+ℹ pass 13
+ℹ fail 0
+ℹ skipped 0
+All checks passed!
+48 files already formatted
+
+Live HTTP and WebSocket regression results
+Day 1 smoke checks passed
+Integration smoke checks passed
+showdown gameplay smoke passed
+fold gameplay smoke passed
+tie gameplay smoke passed
+timeout-fold smoke passed
+timeout-check smoke passed
+reconnect smoke passed
+forfeit smoke passed
+both-absent smoke passed
+
+Browser regression results
+
+chromium
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+offline: navigator.onLine=False, fetch succeeded=False, browser events=1, synthetic event=False; actions suspended, peer paused, seat restored
+restart: both sessions invalidated; neither browser reserved a new seat
+replacement: displaced tab stopped; current seat folded
+history: landing=cache, active=cache, paused=cache, expired=cache, terminal=cache, waiting=cache
+pending history: reload (websocket), exact replay sent twice, one mutation and pot 20
+
+firefox
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+watchdog: 4.51s, 7 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+offline: navigator.onLine=False, fetch succeeded=False, browser events=0, synthetic event=True; actions suspended, peer paused, seat restored
+restart: both sessions invalidated; neither browser reserved a new seat
+replacement: displaced tab stopped; current seat folded
+history: landing=reload, active=reload, paused=reload, expired=reload, terminal=reload, waiting=reload
+pending history: reload, exact replay sent twice, one mutation and pot 20
+
+webkit
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+offline: navigator.onLine=False, fetch succeeded=False, browser events=1, synthetic event=False; actions suspended, peer paused, seat restored
+restart: both sessions invalidated; neither browser reserved a new seat
+replacement: displaced tab stopped; current seat folded
+history: landing=reload, active=reload, paused=reload, expired=reload, terminal=reload, waiting=reload
+pending history: reload, exact replay sent twice, one mutation and pot 20
+
+Mixed-browser, input, and packaging results
+extended: five hands, four rotations, two refreshes, conserved total 400
+usability: 6 viewports, 200% root text, keyboard showdown and Ready, touch action 156×44; contrast red card 6.00:1, action 10.70:1, focus 10.44:1
+extended: five hands, four rotations, two refreshes, conserved total 400
+offline history: cache, navigator.onLine=True, initial status=Connected
+CDP freeze: countdown recovered 30s → 28s, no synthetic poker command, call applied once
+native zoom: reflow, private card labels, focus, and keyboard call passed at 200%
+room-code feedback: focused field, aria-invalid=true, aria-errormessage=notice
+input edges: held Enter submitted one check, focus moved to action status, deliberate touch Check and Bet both worked
+Runtime only, Python 3.13.9
+installed app: 7 assets, health, independent admission and sockets, fold 195/205, Ready → 185/200 + pot 15
+Wheel manifest: 7 frontend assets, no evidence, tests, environment or repository metadata
+installed app: 7 assets, health, independent admission and sockets, fold 195/205, Ready → 185/200 + pot 15
+Clean checkout remained clean after verification.
