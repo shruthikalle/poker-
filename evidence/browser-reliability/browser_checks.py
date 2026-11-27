@@ -1,6 +1,7 @@
 """Reliability and usability checks using the existing two-player browser fixture."""
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -81,6 +82,91 @@ def restart(browser):
             bc.close()
 
 
+def command_delivery(browser, *, refresh=False):
+    sent = []
+    connections = 0
+    suppressed = 0
+
+    def configure(page):
+        def handler(client):
+            nonlocal connections
+            connections += 1
+            number = connections
+            upstream = client.connect_to_server()
+
+            def send(payload):
+                if json.loads(payload)["type"] == "action":
+                    sent.append(payload)
+                upstream.send(payload)
+
+            def receive(payload):
+                nonlocal suppressed
+                missing = "action_ack" if refresh else "snapshot"
+                if number == 1 and sent and json.loads(payload)["type"] == missing:
+                    suppressed += 1
+                else:
+                    client.send(payload)
+
+            client.on_message(send)
+            upstream.on_message(receive)
+
+        page.route_web_socket("**/ws", handler)
+
+    with server("showdown") as base:
+        a, b, ac, bc, _, _ = table(browser, base, configure=configure)
+        try:
+            a.get_by_role("button", name="Call · 5").click()
+            wait_text(b, "#pot", "20 chips")
+            if refresh:
+                wait_text(a, "#pot", "20 chips")
+                wait_text(a, "#action-status", "Waiting for server confirmation…")
+                assert suppressed == 1
+                a.reload()
+            expect(a.locator("#action-status")).to_have_text(
+                "Actions are unavailable.", timeout=7000
+            )
+            wait_text(a, "#pot", "20 chips")
+            wait_text(a, "#your-stack", "190 chips")
+            assert connections == 2 and suppressed >= 1, (connections, suppressed)
+            assert len(sent) == (2 if refresh else 1) and sent[0] == sent[-1]
+            print(
+                f"command {'refresh' if refresh else 'snapshot loss'}: {connections} sockets, "
+                f"{len(sent)} exact command sends, pot 20",
+                flush=True,
+            )
+        finally:
+            ac.close()
+            bc.close()
+
+
+def initial_socket_failure(browser):
+    attempts = 0
+    with server("showdown") as base, browser.new_context() as context:
+        page = context.new_page()
+
+        def handler(client):
+            nonlocal attempts
+            attempts += 1
+            client.connect_to_server()
+            if attempts == 1:
+                # Complete the real upgrade but drop the first auth frame.
+                client.on_message(lambda _: client.close(code=1011))
+
+        page.route_web_socket("**/ws", handler)
+        posts = []
+        page.on("request", lambda request: posts.append(request.method))
+        page.goto(base)
+        page.get_by_role("button", name="Create room").click()
+        expect(page.get_by_role("heading", name="Waiting for opponent")).to_be_visible(
+            timeout=7000
+        )
+        assert attempts == 2 and posts.count("POST") == 1
+        print(
+            "initial socket failure: reauthenticated on attempt 2 with a single admission",
+            flush=True,
+        )
+
+
 def table_state(page):
     return page.locator(".chips, #pot").all_text_contents()
 
@@ -133,6 +219,7 @@ def extended(browser, peer):
 
 
 def keyboard_activate(page, target, key="Enter"):
+    expect(target).to_be_enabled()
     for _ in range(20):
         if target.evaluate("element => element === document.activeElement"):
             page.keyboard.press(key)
@@ -246,6 +333,14 @@ def usability(browser, screenshots):
         )
         outline_ratio = contrast(outline, panel_background)
         assert style == "solid" and outline_ratio >= 3
+        announced = a.locator("#announcements").text_content()
+        displayed = a.locator("#turn-clock").text_content()
+        a.wait_for_function(
+            "previous => document.getElementById('turn-clock').textContent !== previous",
+            arg=displayed,
+        )
+        expect(a.locator("#announcements")).to_have_text(announced)
+        expect(focus).to_be_focused()
         a.keyboard.press("Enter")
         wait_text(b, "#pot", "20 chips")
         touch = b.get_by_role("button", name="Check", exact=True)
@@ -285,11 +380,20 @@ def usability(browser, screenshots):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    choices = (
+        "network",
+        "restart",
+        "initial-socket",
+        "missing-snapshot",
+        "pending-refresh",
+        "extended",
+        "usability",
+    )
     parser.add_argument(
         "--scenario",
         nargs="+",
-        choices=("network", "restart", "extended", "usability"),
-        default=("network", "restart", "extended", "usability"),
+        choices=choices,
+        default=choices,
     )
     parser.add_argument("--screenshots", type=Path)
     parser.add_argument(
@@ -311,6 +415,10 @@ def main():
                 network(browser)
             elif scenario == "restart":
                 restart(browser)
+            elif scenario == "initial-socket":
+                initial_socket_failure(browser)
+            elif scenario in ("missing-snapshot", "pending-refresh"):
+                command_delivery(browser, refresh=scenario == "pending-refresh")
             elif scenario == "extended":
                 extended(browser, peer)
             else:

@@ -1,0 +1,40 @@
+Fresh environment without the optional browser group.
+$ uv sync --offline --locked
+Core app imports without browser tooling
+Ran 120 tests in 0.445s
+OK
+Ran 120 tests in 0.403s
+OK
+All checks passed!
+44 files already formatted
+Successfully built <temporary wheel directory>/heads_up_live_poker-0.1.0-py3-none-any.whl
+server/static/index.html
+server/static/styles.css
+server/static/js/app.mjs
+server/static/js/network.mjs
+server/static/js/render.mjs
+server/static/js/session.mjs
+server/static/js/state.mjs
+
+$ node --test tests/browser/client.test.mjs
+✔ revision pair rejects regression but accepts pause, resume, new hands and clock samples (1.996583ms)
+✔ decoder rejects malformed and unsafe frame shapes (2.014333ms)
+✔ command uses random identity and authoritative hand and engine revision (4.31225ms)
+✔ ack and snapshot can arrive in either order without releasing stale actions (2.74375ms)
+✔ signals authority only for server-offered moves, and labels exact fixed amounts (0.283291ms)
+✔ session storage retains only seat metadata and exact unresolved payload (1.079417ms)
+✔ admission persistence recovers the exact operation and replaces it with seat identity (0.885292ms)
+✔ monotonic sampling handles delays, pause, resume, and zero clamp (0.118542ms)
+✔ socket authority, stale generation, bounded reconnect and replacement (2.051583ms)
+✔ command recovery has one fixed monotonic deadline per transmission (1.725834ms)
+✔ heartbeat and browser hints relinquish stale authority without reviving replaced seats (0.802666ms)
+✔ automatic reconnect stops after eleven schedules and explicit exit cancels retries (0.414209ms)
+✔ default scheduling preserves the browser global receiver (0.367875ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 198.329958

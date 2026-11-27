@@ -1,1 +1,2 @@
-watchdog: 4.52s, 8 snapshot requests, 2 command sends, pot 20, stack A 190
+$ uv run --locked --group browser python evidence/browser-reliability/recovery_probe.py --only watchdog
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190

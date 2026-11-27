@@ -9,16 +9,29 @@ from time import monotonic
 from playwright.sync_api import expect, sync_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "browser-interface"))
-from browser_smoke import server, table, wait_text  # noqa: E402
+from browser_smoke import observe_wire, server, table, wait_text  # noqa: E402
 
 
 def admission(browser, kind, fixed, *, before=False, refresh=False):
-    with server("showdown") as base, browser.new_context() as context:
+    with (
+        server("showdown") as base,
+        browser.new_context() as context,
+        browser.new_context() as peer_context,
+    ):
         page = context.new_page()
+        incoming, _, urls, logs = observe_wire(page)
         page.goto(base)
+        peer = peer_context.new_page() if fixed else None
         if kind == "join":
-            host = context.request.post(f"{base}/api/rooms", data={"bet_unit": 10})
-            assert host.status == 201
+            if peer:
+                peer.goto(base)
+                peer.get_by_role("button", name="Create room").click()
+                expect(
+                    peer.get_by_role("heading", name="Waiting for opponent")
+                ).to_be_visible()
+            else:
+                host = context.request.post(f"{base}/api/rooms", data={"bet_unit": 10})
+                assert host.status == 201
         status = []
         bodies = []
         headers = []
@@ -90,6 +103,32 @@ def admission(browser, kind, fixed, *, before=False, refresh=False):
             f"ready={identity.json()['table_ready']}, refresh={refresh}",
             flush=True,
         )
+        if peer:
+            if kind == "create":
+                peer.goto(base)
+                peer.get_by_label("Room code").fill("FRIEND42")
+                peer.get_by_role("button", name="Join room").click()
+            for current in (page, peer):
+                wait_text(current, "#game-title", "Hand 1 · Preflop")
+                wait_text(current, "#pot", "15 chips")
+            blocked = context.request.post(
+                f"{base}/api/rooms/join", data={"room_code": "FRIEND42"}
+            )
+            assert blocked.status == 409 and set(blocked.json()) == {"detail"}
+            private = [token, *headers]
+            observed = [
+                page.url,
+                page.content(),
+                peer.content(),
+                *urls,
+                *logs,
+                json.dumps(incoming),
+            ]
+            assert all(secret not in value for secret in private for value in observed)
+            print(
+                "  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output",
+                flush=True,
+            )
 
 
 def watchdog(browser, fixed):
@@ -131,7 +170,7 @@ def watchdog(browser, fixed):
         """)
 
     with server("showdown") as base:
-        a, b, ac, bc, _, _ = table(browser, base, configure=configure)
+        a, b, ac, bc, _, traces = table(browser, base, configure=configure)
         try:
             a.get_by_role("button", name="Call · 5").click()
             wait_text(b, "#pot", "20 chips")
@@ -154,9 +193,15 @@ def watchdog(browser, fixed):
             assert dropped == 1 and requests >= 5
             wait_text(a, "#pot", "20 chips")
             wait_text(a, "#your-stack", "190 chips")
+            revisions = {
+                frame["revision"]
+                for frame in traces["B"][0]
+                if frame["type"] == "snapshot" and frame["hand_id"] == 1
+            }
+            assert revisions == {1, 2}
             print(
                 f"watchdog: {elapsed:.2f}s, {requests} snapshot requests, "
-                f"{len(actions)} command sends, pot 20, stack A 190",
+                f"{len(actions)} command sends, revision 1→2, pot 20, stack A 190",
                 flush=True,
             )
         finally:

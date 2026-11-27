@@ -33,3 +33,20 @@ PASS both-absent
 PASS replay
 PASS stale
 PASS errors
+
+Existing live smoke results from an archive of the same baseline
+Day 1 smoke checks passed
+Integration smoke checks passed
+showdown gameplay smoke passed
+fold gameplay smoke passed
+tie gameplay smoke passed
+timeout-fold smoke passed
+timeout-check smoke passed
+reconnect smoke passed
+forfeit smoke passed
+both-absent smoke passed
+
+Repeat of the historical browser probe from the archived baseline
+create: upstream statuses [201, 409], original seat A, ready=False, refresh=False
+join: upstream statuses [200, 409], original seat B, ready=True, refresh=False
+watchdog: 5.80s, 10 snapshot requests, 1 command sends, revision 1→2, pot 20, stack A 190

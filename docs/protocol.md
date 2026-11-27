@@ -55,7 +55,36 @@ Status is `waiting` or `ready`, where `ready` means both seats are allocated
 and the first hand has been initialized. The future Ready flags apply after
 a hand ends. Room requests accept only their documented fields. Errors use
 a fixed `detail` string with 422 for invalid input, 404 for an unknown code,
-or 409 for an existing room or full room.
+or 409 for an existing room or full room. A supplied foreign browser
+origin is rejected with 403.
+
+### Recovering canonical admission
+
+The two canonical room routes accept an optional `Admission-Key`
+header with exactly 64 lower-case hexadecimal characters. The browser
+generates this bearer recovery credential from 32 cryptographically
+random bytes and keeps it out of URLs. The request identity is the
+operation and its validated value (numeric bet unit for create, exact
+case-sensitive room code for join).
+
+Under the room lock, the server either allocates the seat and records
+the original response, replays the same response and HTTP status, or
+returns 409 for a key bound to a different request. Malformed or
+duplicate headers receive 422. An unknown well-formed key follows
+ordinary allocation rules. It cannot recover seats that another
+credential reserved. Existing originless clients and calls without this
+header retain their admission behavior. The legacy lobby routes do
+not use keyed admission.
+
+The room retains a digest and the original successful response for each
+keyed seat, up to two records. Rejections do not consume storage.
+Replay does not initialize a new hand, post blinds, publish another
+lobby event, or update the historical admission body. Recovering A's
+admission can still report `waiting` after B joins. Authenticate on the
+socket to obtain current state. Records expire with process exit. After
+a restart an explicitly retried create may create a new room if the
+process is empty. A retried join still needs its original room code.
+Neither replay nor session recovery persists across restart.
 
 The lobby routes share the same two seats and credentials.
 
@@ -83,8 +112,8 @@ for A and B. Lobby sockets get presence and admission updates, replace an
 old lobby socket on the same seat, and accept `ping` with a `pong` reply.
 Other well-formed requests receive `NOT_READY`. The `room_status` mode
 provides a one-time status snapshot without participating in lobby presence.
-Both modes accept local browser origins and non-browser clients that omit
-Origin, and both cap inbound messages at 4,096 UTF-8 bytes. Valid auth
+Both modes and gameplay accept same-origin local browsers and clients
+that omit Origin. WebSockets cap inbound messages at 4,096 UTF-8 bytes. Valid auth
 messages select their reply format. The legacy `server.main:app` launch
 also keeps the lobby error response for ambiguous malformed first
 messages. The `poker.server:create_app` launch closes those without a payload.
@@ -293,8 +322,11 @@ forfeit-specification approval remains pending.
 FastAPI serves the browser at `/` and only the frontend directory under
 `/assets`. HTTP and WebSocket URLs are derived from the page origin.
 The gameplay authentication, actions, Ready, and recovery schemas above
-also serve the browser. The only shared server interface addition is
-static routing. No engine or wire message changed.
+also serve the browser. Browser admission and WebSocket upgrade require a
+matching scheme, host, and port when the Origin header is present.
+Launch on `127.0.0.1` or `localhost` and use the same address throughout.
+The origin check supplements authentication and is independent of the
+gameplay message schemas and engine.
 
 The browser requires an authenticated snapshot before enabling gameplay.
 It discards a snapshot if either engine `revision` or
@@ -303,11 +335,14 @@ the room. If both stay equal the arrival can refresh the clock sample.
 The current WebSocket generation alone may publish state. A terminal
 snapshot remains terminal for that browser session.
 
-The browser stores seat, room code, bet unit, token, and any unresolved
-wire command in per-tab `sessionStorage`. It keeps no snapshots or cards
-there. This permits refresh recovery and protects against unrelated tabs
-overwriting each other's session records. Same-origin scripts and browser
-developer tools can read the token. A duplicated tab may inherit it.
+Before admission, the browser saves the pending operation, input, and
+recovery key in per-tab `sessionStorage`. Ambiguous failures retain that
+record and offer a deliberate retry, including after refresh. A definitive
+rejection clears it. On success the browser replaces the recovery record
+with seat, room code, bet unit, token, and any unresolved wire command.
+Snapshots and cards stay out of storage. Browser developer tools and
+same-origin scripts can read the credentials, and a duplicated tab may
+inherit them.
 When replaced, the tab stops automatic reconnect attempts. A manual
 reconnect is an explicit choice to reclaim that seat. Leaving clears the
 saved session and can trigger ordinary disconnect expiry.
@@ -316,16 +351,36 @@ Each seat's tab sends at most one unresolved mutation at a time. A success
 acknowledgment waits for a snapshot at or beyond its outcome revision.
 A rejection requests a snapshot and requires a deliberate new action.
 If delivery is ambiguous, the client resends the exact stored payload on
-a newly authenticated current connection after synchronizing. It retires
-a pending command when it observes a hand outside server replay retention.
+a newly authenticated connection after synchronizing. Each transmission
+gets one 4.5-second monotonic watchdog. Snapshots and acknowledgments
+cannot move that deadline. After two automatic watchdog recoveries the
+tab asks for a deliberate reconnect while retaining an ambiguous
+command. It drops unresolved gameplay at terminal results and retires
+commands outside server replay retention.
 It never changes a pending action ID or claims a successful send committed
 the engine mutation. Server replay and revision enforcement remain
 authoritative.
+
+With an authenticated connection the client sends a heartbeat after
+six seconds and allows four seconds for a reply. Connection retries
+back off from 250 ms to 2 seconds and stop after eleven automatic
+attempts per failure sequence. Browser network and page events are
+hints. They never confer authority or reclaim an explicitly replaced
+seat. Invalid sessions stop retrying and require leaving the old session.
 
 Turn and grace presentation use elapsed `performance.now()` time from
 the latest sampled snapshot. A paused turn retains its sampled amount.
 The browser requests a fresh snapshot on visibility return and never
 sends an automatic fold or forfeit. A sampled countdown may lag the
-server by network transit time and browser scheduling. Terminal views
+server by network transit time and browser scheduling. Without a current
+authenticated snapshot, the latest view is marked last known and
+actions, turn estimates, and grace clocks are suspended. Terminal views
 hide the historical presence record and render the server's match result
 separately from a settled hand result.
+
+This local educational app gates cards and credentials by seat and uses
+only local browser assets. It assumes a trusted machine, browser, and
+same-origin code. Anyone who acquires either bearer credential can act
+as the corresponding player. Loopback HTTP provides no protection
+against network interception if deployed beyond its intended local
+environment.

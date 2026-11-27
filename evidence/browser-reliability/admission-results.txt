@@ -1,3 +1,7 @@
+$ uv run --locked --group browser python evidence/browser-reliability/recovery_probe.py --only admission
 create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
 join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
 create: upstream statuses [None, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output

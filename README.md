@@ -165,6 +165,10 @@ The project began as a new codebase. The combined lockfile includes the followin
 
 The original engine and tests were built with Codex under Srishruthik's direction. Deepthi's Day 1 work added the configurable room API, private session tokens, and first-hand initialization. Srishruthik's later server work added the lobby API, connection tracking, and socket replacement. Deepthi's Day 2 work extends that persistent socket with queued gameplay delivery, the coordinator, private views, and headless integration tests. Day 3 extends that same coordinator with timers, gameplay presence, and recovery. Deepthi added the browser interface and its real two-session tests using the existing engine, admission, and gameplay protocol. Actual partner and agent contributions will be identified in the final slides and repository history.
 
+Deepthi directed Codex's browser reliability work on room admission,
+command delivery, network recovery, accessibility, and the browser
+test matrix. Srishruthik's engine and lobby responsibilities continue.
+
 ## Setup and demo
 
 From a clean checkout, install the locked dependencies and start the server.
@@ -187,27 +191,42 @@ and the browser's monotonic clock. The server enforces all deadlines.
 Forfeit and both-absent results show the outstanding pot as unawarded.
 The browser hides historical presence on terminal screens.
 
+If admission fails before the browser can confirm it, select **Retry
+admission**. The same request survives a refresh and can recover the
+original seat while that server is running. If play loses its connection,
+the last known table stays visible with actions and countdowns suspended.
+The browser resumes after authenticating and receiving an up-to-date view.
+When the server restarts, leave the expired session before starting again.
+
 ### Browser verification
 
 Use Node.js 22 or later for the built-in JavaScript test runner
-(Node 26.7.0 verified). The optional browser group uses [Playwright
-1.55.0](https://pypi.org/project/playwright/1.55.0/) with its matching
-Chromium build. Browser processes and Node.js are development-only.
+(Node 26.7.0 verified). The optional browser group uses Playwright 1.55.0
+with Chromium, Firefox, and WebKit builds. Browser automation and Node.js
+are development-only. [Playwright dependency](https://pypi.org/project/playwright/1.55.0/)
 
 ```sh
 uv run --locked python -m unittest discover -s tests -v
 uv run --locked python -W error -m unittest discover -s tests -v
 node --test tests/browser/client.test.mjs
 uv sync --locked --group browser
-uv run --locked --group browser playwright install chromium
-uv run --locked --group browser python evidence/browser-interface/browser_smoke.py
+uv run --locked --group browser playwright install chromium firefox webkit
+uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --browser chromium
+uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --browser firefox
+uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --browser webkit
+uv run --locked --group browser python evidence/browser-reliability/recovery_probe.py
+uv run --locked --group browser python evidence/browser-reliability/browser_checks.py --peer firefox
 node evidence/browser-interface/decisions.mjs
 ```
 
 The browser suite starts its own fresh loopback server for each
 scenario. Add `--screenshots /path/to/output` to capture fresh evidence.
-On Linux systems missing Chromium system libraries, Playwright documents
-`playwright install --with-deps chromium`.
+The reliability runner checks keyboard play, rendered accessibility
+names, contrast, touch emulation, 200% root text and viewport widths of
+320–1440 CSS pixels. Its mixed-browser fixture plays five hands and
+checks that both views conserve chips across Ready and refresh. Actual
+screen-reader use and physical mobile hardware remain unverified.
+[Browser verification matrix](evidence/browser-reliability/matrix.md)
 
 ### Wire-level fixture checks
 
@@ -264,6 +283,7 @@ curl -sS -H 'Content-Type: application/json' -d '{"room_code":"ROOM_CODE"}' http
 - [poker/server.py](poker/server.py) serves both HTTP and WebSocket contracts. [server/connections.py](server/connections.py) tracks lobby sockets by seat. [server/sessions.py](server/sessions.py) maps the older lobby API to the same room.
 - [docs/protocol.md](docs/protocol.md) describes both current contracts and the gameplay decisions still open.
 - [Browser evidence and reproduction steps](evidence/browser-interface/notes.md) cover two-player gameplay, recovery, privacy, and frontend decisions.
+- [Browser reliability evidence](evidence/browser-reliability/notes.md) covers lost network responses, accessibility, and cross-browser verification.
 - [Day 3 evidence and reproduction steps](evidence/deepthi-day-3/notes.md) cover timer boundaries, recovery, and the replay fix.
 - [Day 2 evidence and reproduction steps](evidence/deepthi-day-2/notes.md) cover gameplay, privacy, and coordination.
 - [Day 1 baseline](evidence/deepthi-day-1/baseline.txt) and [Day 1 results](evidence/deepthi-day-1/test-results.txt) preserve the original checks. The [integration notes](evidence/integration-day1-day3/notes.md) and [integration results](evidence/integration-day1-day3/test-results.txt) record the combined validation and joint decisions.
@@ -276,4 +296,7 @@ The game supports heads-up play only, one active room per server process, fixed-
 The browser and headless clients share one in-memory room per server
 process. Persistence and a room reset endpoint remain future work. Replay outcomes expire after the previous hand. Rejected
 outcomes also expire when their FIFO is full. Accepted commands remain
-protected while their hand is retained.
+protected while their hand is retained. Play on loopback using the same
+scheme, hostname, and port for the browser and server. Session and
+admission recovery credentials are sensitive bearer values. The local
+deployment assumes a trusted host and browser.

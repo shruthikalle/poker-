@@ -261,6 +261,35 @@ test("heartbeat and browser hints relinquish stale authority without reviving re
   assert.equal(timers.size, 0);
 });
 
+test("automatic reconnect stops after eleven schedules and explicit exit cancels retries", () => {
+  const timers = new Map();
+  const connection = new GameplayConnection({
+    pageURL: "https://example.test/", token: "fixture-token", Socket: FakeSocket,
+    onStatus() {}, onFrame() {},
+    schedule(fn, delay) { const key = Symbol(); timers.set(key, {fn, delay}); return key; },
+    cancel(key) { timers.delete(key); },
+  });
+  connection.connect();
+  for (let count = 0; count < 11; count++) {
+    connection.socket.close();
+    assert.equal(timers.size, 1);
+    const [[key, timer]] = timers;
+    assert.ok(timer.delay <= 2000);
+    timers.delete(key);
+    timer.fn();
+  }
+  connection.socket.close();
+  assert.equal(connection.state, "offline");
+  assert.equal(timers.size, 0);
+  connection.retryManually();
+  connection.socket.close();
+  const [obsolete] = timers.values();
+  connection.halt();
+  obsolete.fn();
+  assert.equal(connection.socket, null);
+  assert.equal(timers.size, 0);
+});
+
 test("default scheduling preserves the browser global receiver", {concurrency: false}, () => {
   const originalSet = globalThis.setTimeout;
   const originalClear = globalThis.clearTimeout;

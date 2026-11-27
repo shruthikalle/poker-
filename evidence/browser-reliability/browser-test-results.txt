@@ -1,0 +1,14 @@
+$ uv run --locked --group browser python evidence/browser-reliability/browser_checks.py --peer firefox
+chromium 140.0.7339.16; firefox 141.0
+offline: authority and timing hidden; peer paused; same seat resumed; pot 20
+restart: both sessions invalidated; neither browser reserved a new seat
+initial socket failure: reauthenticated on attempt 2 with a single admission
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+command refresh: 2 sockets, 2 exact command sends, pot 20
+extended: five hands, four rotations, two refreshes, conserved total 400
+touch double-tap: sent actions ['check']
+usability: 6 viewports, 200% root text, keyboard showdown and Ready, touch action 156×44; contrast red card 6.00:1, action 10.70:1, focus 10.44:1
+
+$ uv run --locked --group browser python evidence/browser-reliability/browser_checks.py --peer webkit --scenario extended
+chromium 140.0.7339.16; webkit 26.0
+extended: five hands, four rotations, two refreshes, conserved total 400

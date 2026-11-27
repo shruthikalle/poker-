@@ -1,0 +1,45 @@
+
+$ uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --browser chromium
+chromium 140.0.7339.16
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+
+$ uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --browser firefox
+firefox 141.0
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+
+$ uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --browser webkit
+webkit 26.0
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
