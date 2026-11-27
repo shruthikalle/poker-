@@ -1,0 +1,4 @@
+$ uv run --locked --group browser python evidence/browser-reliability/recovery_probe.py --baseline
+create: upstream statuses [201, 409], original seat A, ready=False, refresh=False
+join: upstream statuses [200, 409], original seat B, ready=True, refresh=False
+watchdog: 5.81s, 10 snapshot requests, 1 command sends, pot 20, stack A 190
