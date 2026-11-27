@@ -1,0 +1,30 @@
+$ uv run --locked python -m unittest discover -s tests -p test_engine.py -v
+$ uv run --locked python -m unittest discover -s tests -p test_gameplay.py -v
+test_g1_initial_legal_actions_and_blinds (test_engine.FirstHandTests.test_g1_initial_legal_actions_and_blinds) ... ok
+test_g2_call_then_check_reveals_flop (test_engine.FirstHandTests.test_g2_call_then_check_reveals_flop) ... ok
+test_g5_fold_awards_the_pot (test_engine.FirstHandTests.test_g5_fold_awards_the_pot) ... ok
+test_g7_r3_two_raises_then_third_is_rejected (test_engine.FirstHandTests.test_g7_r3_two_raises_then_third_is_rejected) ... ok
+test_r1_out_of_turn_action_leaves_every_field_unchanged (test_engine.FirstHandTests.test_r1_out_of_turn_action_leaves_every_field_unchanged) ... ok
+Ran 5 tests in 0.000s
+OK
+test_big_blind_may_raise_after_small_blind_calls (test_gameplay.BettingTests.test_big_blind_may_raise_after_small_blind_calls) ... ok
+test_g10_match_ends_if_next_big_blind_cannot_be_posted (test_gameplay.BettingTests.test_g10_match_ends_if_next_big_blind_cannot_be_posted) ... ok
+test_g11_second_hand_alternates_button_and_blinds (test_gameplay.BettingTests.test_g11_second_hand_alternates_button_and_blinds) ... ok
+test_g12_raise_cap_resets_after_round (test_gameplay.BettingTests.test_g12_raise_cap_resets_after_round) ... ok
+test_g3_bet_call_advances_to_turn_with_correct_pot (test_gameplay.BettingTests.test_g3_bet_call_advances_to_turn_with_correct_pot) ... ok
+test_g4_turn_and_river_checks_reach_paid_showdown (test_gameplay.BettingTests.test_g4_turn_and_river_checks_reach_paid_showdown) ... ok
+test_g6_flop_fold_awards_all_chips_in_pot (test_gameplay.BettingTests.test_g6_flop_fold_awards_all_chips_in_pot) ... ok
+test_g8_two_checks_advance_once_then_reject_stale_check (test_gameplay.BettingTests.test_g8_two_checks_advance_once_then_reject_stale_check) ... ok
+test_g9_call_that_would_empty_stack_is_illegal (test_gameplay.BettingTests.test_g9_call_that_would_empty_stack_is_illegal) ... ok
+test_postflop_bet_raise_call_closes_round (test_gameplay.BettingTests.test_postflop_bet_raise_call_closes_round) ... ok
+test_r10_repeated_ready_does_not_start_a_new_hand (test_gameplay.BettingTests.test_r10_repeated_ready_does_not_start_a_new_hand) ... ok
+test_r2_reject_invalid_actions_without_mutating_state (test_gameplay.BettingTests.test_r2_reject_invalid_actions_without_mutating_state) ... ok
+test_c1_pair_of_aces_wins_known_deal (test_gameplay.DealTests.test_c1_pair_of_aces_wins_known_deal) ... ok
+test_c2_known_ace_high_tie_splits_pot (test_gameplay.DealTests.test_c2_known_ace_high_tie_splits_pot) ... ok
+test_c3_bad_next_deck_leaves_finished_hand_unchanged (test_gameplay.DealTests.test_c3_bad_next_deck_leaves_finished_hand_unchanged) ... ok
+test_c3_reject_duplicate_or_short_deck (test_gameplay.DealTests.test_c3_reject_duplicate_or_short_deck) ... ok
+test_r5_reject_bad_bet_units (test_gameplay.DealTests.test_r5_reject_bad_bet_units) ... ok
+Ran 17 tests in 0.006s
+OK
+
+No tracked engine simulation executable or measured seed set was found. No simulated-hand count claimed.

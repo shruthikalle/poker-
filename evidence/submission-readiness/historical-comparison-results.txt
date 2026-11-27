@@ -1,0 +1,34 @@
+Historical application b051973843c36a593ca40516f6f43a51a332b60d and improved application at a6903fb3286fbf27ff96e6e32e4fcadf8eed0ed0. Same tracked browser fault probe.
+create: upstream statuses [201, 409], original seat A, ready=False, refresh=False
+join: upstream statuses [200, 409], original seat B, ready=True, refresh=False
+watchdog: 5.80s, 10 snapshot requests, 1 command sends, revision 1→2, pot 20, stack A 190
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+create: upstream statuses [None, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+
+$ uv run --locked python evidence/deepthi-day-2/decision-privacy.py
+
+$ uv run --locked python evidence/deepthi-day-2/decision-coordination.py
+
+$ uv run --locked python evidence/deepthi-day-3/decision-deadlines.py
+
+$ node evidence/browser-interface/decisions.mjs
+controlled raw GameState: {"internal_fields": ["big_blind_option", "checks_in_row", "deck", "hole_cards"], "opponent_cards": ["3c", "Ts"], "passed": false, "private_room_fields": 0, "unrevealed_cards": 48}
+production seat A snapshot: {"internal_fields": [], "opponent_cards": [], "passed": true, "private_room_fields": 0, "unrevealed_cards": 0}
+controlled split checks: {"a_chips_deducted": 5, "accepted_transitions": 2, "at_most_once": false, "chips_conserved": true, "engine_calls": 2, "final_pot": 20, "revision_increments": 2}
+production coordinator: {"a_chips_deducted": 5, "accepted_transitions": 1, "at_most_once": true, "chips_conserved": true, "engine_calls": 1, "final_pot": 20, "revision_increments": 1}
+reset-on-reconnect: deadline=50, active_seconds=42
+production pause/resume: deadline=38, active_seconds=30
+callback-only model at t=35 before the callback: late_call=True pot=20
+production ingress at t=35 before the scheduler: late_call=False automatic=fold pot=0 revision=2
+Controlled engine-only filter:
+  paused: rendered active at lifecycle revision 2
+  active: rendered active at lifecycle revision 2
+Production revision pair:
+  paused: rendered paused at lifecycle revision 3
+  active: rendered active at lifecycle revision 4
+One callback at 12341 ms: callback counter 29000 ms; monotonic anchor 17659 ms

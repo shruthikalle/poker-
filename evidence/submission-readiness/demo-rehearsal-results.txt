@@ -1,0 +1,8 @@
+Automated two-session browser rehearsal and live protocol probe on the audited source a6903fb3286fbf27ff96e6e32e4fcadf8eed0ed0.
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case rehearsal
+rehearsal: private admission → 210/190 showdown → Ready → pause (30s · paused) → resume; fresh fixture forfeit 195+190+15=400; 3.85s
+
+$ uv run --locked python evidence/submission-readiness/demo_protocol.py
+Before: revision 1, actor A, stacks 195/190, pot 15
+B tries fold: WRONG_TURN. After: revision 1, actor A, stacks 195/190, pot 15
+B reconnects as B. A turn paused at 27905 ms, resumed at 27905 ms; revision 1, pot 15

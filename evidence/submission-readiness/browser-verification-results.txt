@@ -1,0 +1,104 @@
+
+Engine chromium. browser_smoke.py plus browser_audit.py reliability, history and pending-history.
+chromium 140.0.7339.16
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+chromium 140.0.7339.16
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+offline: navigator.onLine=False, fetch succeeded=False, browser events=1, synthetic event=False; actions suspended, peer paused, seat restored
+restart: both sessions invalidated; neither browser reserved a new seat
+replacement: displaced tab stopped; current seat folded
+chromium 140.0.7339.16
+history: landing=cache, active=cache, paused=cache, expired=cache, terminal=cache, waiting=cache
+chromium 140.0.7339.16
+pending history: reload (websocket), exact replay sent twice, one mutation and pot 20
+
+Engine firefox. browser_smoke.py plus browser_audit.py reliability, history and pending-history.
+firefox 141.0
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+firefox 141.0
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+offline: navigator.onLine=False, fetch succeeded=False, browser events=0, synthetic event=True; actions suspended, peer paused, seat restored
+restart: both sessions invalidated; neither browser reserved a new seat
+replacement: displaced tab stopped; current seat folded
+firefox 141.0
+history: landing=reload, active=reload, paused=reload, expired=reload, terminal=reload, waiting=reload
+firefox 141.0
+pending history: reload, exact replay sent twice, one mutation and pot 20
+
+Engine webkit. browser_smoke.py plus browser_audit.py reliability, history and pending-history.
+webkit 26.0
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+webkit 26.0
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+offline: navigator.onLine=False, fetch succeeded=False, browser events=1, synthetic event=False; actions suspended, peer paused, seat restored
+restart: both sessions invalidated; neither browser reserved a new seat
+replacement: displaced tab stopped; current seat folded
+webkit 26.0
+history: landing=reload, active=reload, paused=reload, expired=reload, terminal=reload, waiting=reload
+webkit 26.0
+pending history: reload, exact replay sent twice, one mutation and pot 20
+
+Additional Chromium, mixed-engine and touch suites
+room-code feedback: focused field, aria-invalid=true, aria-errormessage=notice
+input edges: held Enter submitted one check, focus moved to action status, deliberate touch Check and Bet both worked
+offline history: cache, navigator.onLine=True, initial status=Connected
+CDP freeze: countdown recovered 30s → 28s, no synthetic poker command, call applied once
+native Chromium tab zoom: 1.00×, CSS viewport 1440px
+native Chromium tab zoom: 1.50×, CSS viewport 960px
+native Chromium tab zoom: 2.00×, CSS viewport 720px
+native zoom: reflow, private card labels, focus, and keyboard call passed at 200%
+rehearsal: private admission → 210/190 showdown → Ready → pause (30s · paused) → resume; fresh fixture forfeit 195+190+15=400; 3.85s
+extended: five hands, four rotations, two refreshes, conserved total 400
+extended: five hands, four rotations, two refreshes, conserved total 400
+touch double-tap: sent actions ['check']
+usability: 6 viewports, 200% root text, keyboard showdown and Ready, touch action 156×44; contrast red card 6.00:1, action 10.70:1, focus 10.44:1
+initial socket failure: reauthenticated on attempt 2 with a single admission
+command refresh: 2 sockets, 2 exact command sends, pot 20
