@@ -123,7 +123,8 @@ export function renderTable(state) {
   updateCards("board", view.board, 5, "empty");
 
   const terminal = Boolean(view.match_result);
-  text("lifecycle", lifecycleLabels[view.lifecycle]);
+  const authoritative = status === "connected" || terminal;
+  text("lifecycle", authoritative ? lifecycleLabels[view.lifecycle] : "Last known table");
   const turn = {
     awaiting_players: "Waiting for both players",
     active: view.actor === view.seat ? "Your turn" : `Player ${view.actor}’s turn`,
@@ -133,7 +134,8 @@ export function renderTable(state) {
   }[view.lifecycle];
   text("turn-status", status === "connected" || terminal ? turn : connectionLabels[status]);
   byId("presence").hidden = terminal;
-  text("presence", view.presence[opponent] ? "Opponent connected" : "Opponent disconnected");
+  text("presence", !authoritative ? "Current opponent status is unknown." :
+    view.presence[opponent] ? "Opponent connected" : "Opponent disconnected");
   byId("automatic").hidden = !view.last_automatic_action;
   if (view.last_automatic_action) {
     const {seat, action} = view.last_automatic_action;
@@ -164,16 +166,16 @@ export function renderTable(state) {
 
 export function renderTimers({snapshot: view, sampledAt, status}, now) {
   const clock = view?.turn_clock;
-  const show = clock && !view.match_result && clock.status !== "inactive";
+  const show = status === "connected" && clock && !view.match_result && clock.status !== "inactive";
   byId("turn-clock").hidden = !show;
   byId("turn-progress").hidden = !show;
   if (show) {
     const remaining = remainingMs(clock.remaining_ms, sampledAt, now, clock.status === "running");
     const seconds = Math.ceil(remaining / 1000);
     byId("turn-progress").value = remaining;
-    text("turn-clock", `${seconds}s${clock.status === "paused" ? " · paused" : status === "connected" ? "" : " · last sample"}`);
+    text("turn-clock", `${seconds}s${clock.status === "paused" ? " · paused" : ""}`);
   }
-  const grace = view?.match_result ? null : view?.disconnect_grace;
+  const grace = status !== "connected" || view?.match_result ? null : view?.disconnect_grace;
   byId("grace").hidden = !grace || !(grace.A || grace.B);
   for (const seat of ["A", "B"]) {
     const entry = grace?.[seat], id = `grace-${seat.toLowerCase()}`;

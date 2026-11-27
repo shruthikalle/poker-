@@ -222,6 +222,45 @@ test("command recovery has one fixed monotonic deadline per transmission", () =>
   assert.equal(triggered, 1);
 });
 
+test("heartbeat and browser hints relinquish stale authority without reviving replaced seats", () => {
+  const timers = new Map();
+  const connection = new GameplayConnection({
+    pageURL: "https://example.test/", token: "fixture-token", Socket: FakeSocket,
+    onStatus() {}, onFrame() {},
+    schedule(fn, delay) { const key = Symbol(); timers.set(key, {fn, delay}); return key; },
+    cancel(key) { timers.delete(key); },
+  });
+  function runTimer(delay) {
+    assert.equal(timers.size, 1);
+    const [[key, timer]] = timers;
+    assert.equal(timer.delay, delay);
+    timers.delete(key);
+    timer.fn();
+  }
+  connection.connect();
+  connection.socket.open();
+  connection.synchronized(false);
+  runTimer(6000);
+  assert.equal(connection.socket.sent.at(-1), '{"type":"ping"}');
+  connection.socket.emit("message", {data: '{"type":"pong"}'});
+  runTimer(6000);
+  runTimer(4000);
+  assert.equal(connection.state, "reconnecting");
+  connection.setAvailable("network", false);
+  connection.setAvailable("page", false);
+  connection.setAvailable("network", true);
+  assert.equal(connection.socket, null);
+  assert.equal(timers.size, 0);
+  connection.setAvailable("page", true);
+  const successor = connection.socket;
+  successor.emit("close", {code: 4000});
+  connection.setAvailable("network", false);
+  connection.setAvailable("network", true);
+  assert.equal(connection.state, "replaced");
+  assert.equal(connection.socket, null);
+  assert.equal(timers.size, 0);
+});
+
 test("default scheduling preserves the browser global receiver", {concurrency: false}, () => {
   const originalSet = globalThis.setTimeout;
   const originalClear = globalThis.clearTimeout;

@@ -58,7 +58,7 @@ function draw() {
     retry.textContent = admissionPending ? "Confirming admission…" : "Retry admission";
   }
   const view = state.snapshot;
-  const needsDisplay = state.session && view && !view.match_result &&
+  const needsDisplay = state.session && state.status === "connected" && view && !view.match_result &&
     (view.turn_clock.status === "running" || view.disconnect_grace.A || view.disconnect_grace.B);
   if (displayTimer !== null && !needsDisplay) {
     clearInterval(displayTimer);
@@ -133,7 +133,8 @@ function connect() {
     },
     onFrame: receive,
   });
-  link.connect();
+  if (navigator.onLine === false) link.setAvailable("network", false);
+  else link.connect();
 }
 
 function requestMove(move) {
@@ -246,9 +247,11 @@ dialog.addEventListener("close", () => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && state.status === "connected") link.send({type: "snapshot_request"});
 });
-window.addEventListener("pagehide", () => link?.halt());
+window.addEventListener("offline", () => link?.setAvailable("network", false));
+window.addEventListener("online", () => link?.setAvailable("network", true));
+window.addEventListener("pagehide", () => link?.setAvailable("page", false));
 window.addEventListener("pageshow", event => {
-  if (event.persisted && state.session) link.retryManually();
+  if (event.persisted) link?.setAvailable("page", true);
 });
 if (state.session) connect();
 else draw();

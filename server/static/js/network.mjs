@@ -1,6 +1,7 @@
 import {decode, validUnit} from "./state.mjs";
 
 export const reconnectDelay = attempt => Math.min(250 * 2 ** attempt, 2000);
+const manualOnly = new Set(["replaced", "unauthorized", "protocol"]);
 
 export function commandWatchdog(onTimeout, {
   now = () => performance.now(),
@@ -95,6 +96,8 @@ export class GameplayConnection {
     this.socket = null;
     this.retry = null;
     this.timeout = null;
+    this.suspensions = new Set();
+    this.awaitingPong = false;
   }
 
   status(state) {
@@ -103,21 +106,21 @@ export class GameplayConnection {
   }
 
   connect() {
-    if (this.socket || this.retry !== null) return;
+    if (this.socket || this.retry !== null || this.suspensions.size) return;
     const generation = ++this.generation;
     this.status(this.attempt ? "reconnecting" : "connecting");
     let socket;
     try {
       socket = new this.Socket(socketURL(this.pageURL));
     } catch {
-      this.status("offline");
+      this.disconnected(generation);
       return;
     }
     this.socket = socket;
     const current = callback => event => {
       if (this.socket === socket && this.generation === generation) callback(event);
     };
-    this.timeout = this.schedule(current(() => socket.close()), 4600);
+    this.timeout = this.schedule(current(() => this.abortSocket(socket)), 4600);
     socket.addEventListener("open", current(() => {
       this.status("authenticating");
       this.send({type: "auth", token: this.token, protocol: "gameplay.v1"});
@@ -127,36 +130,56 @@ export class GameplayConnection {
       if (frame?.type === "error" && frame.code === "UNAUTHORIZED") {
         this.halt("unauthorized");
       } else {
+        if (frame?.type === "pong" && this.awaitingPong) this.monitor(socket);
         this.onFrame(frame);
       }
     }));
     socket.addEventListener("close", current(event => {
-      this.clearTimers();
-      this.socket = null;
-      if (event.code === 4000) {
-        this.status("replaced");
-        return;
-      }
-      if (this.terminal || this.attempt >= 11) {
-        this.status("offline");
-        return;
-      }
+      this.disconnected(generation, event.code);
+    }));
+  }
+
+  disconnected(generation, code) {
+    this.clearTimers();
+    this.socket = null;
+    if (code === 4000) {
+      this.status("replaced");
+    } else if (this.terminal || this.attempt >= 11) {
+      this.status("offline");
+    } else {
       this.status("reconnecting");
       this.retry = this.schedule(() => {
         if (this.generation !== generation) return;
         this.retry = null;
         this.connect();
       }, reconnectDelay(this.attempt++));
-    }));
+    }
+  }
+
+  abortSocket(socket) {
+    if (this.socket !== socket) return;
+    this.disconnected(this.generation);
+    socket.close();
   }
 
   synchronized(terminal) {
     const first = this.state !== "connected";
     this.terminal = terminal;
     this.attempt = 0;
-    this.clearTimers();
-    if (first) this.status("connected");
+    if (first) {
+      this.monitor(this.socket);
+      this.status("connected");
+    }
     return first;
+  }
+
+  monitor(socket) {
+    this.clearTimers();
+    this.timeout = this.schedule(() => {
+      if (this.socket !== socket || !this.send({type: "ping"})) return;
+      this.awaitingPong = true;
+      this.timeout = this.schedule(() => this.abortSocket(socket), 4000);
+    }, 6000);
   }
 
   send(payload) {
@@ -165,7 +188,7 @@ export class GameplayConnection {
       this.socket.send(typeof payload === "string" ? payload : JSON.stringify(payload));
       return true;
     } catch {
-      this.socket.close();
+      this.abortSocket(this.socket);
       return false;
     }
   }
@@ -174,6 +197,7 @@ export class GameplayConnection {
     if (this.retry !== null) this.cancel(this.retry);
     if (this.timeout !== null) this.cancel(this.timeout);
     this.retry = this.timeout = null;
+    this.awaitingPong = false;
   }
 
   halt(reason = "idle") {
@@ -186,8 +210,18 @@ export class GameplayConnection {
   }
 
   retryManually() {
+    if (this.suspensions.size) return;
     this.halt();
     this.attempt = 0;
     this.connect();
+  }
+
+  setAvailable(source, available) {
+    const wasSuspended = this.suspensions.size > 0;
+    if (available) this.suspensions.delete(source);
+    else this.suspensions.add(source);
+    if (manualOnly.has(this.state)) return;
+    if (!available && !wasSuspended) this.halt("offline");
+    if (available && wasSuspended && !this.suspensions.size) this.retryManually();
   }
 }
