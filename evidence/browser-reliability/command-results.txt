@@ -1,0 +1,1 @@
+watchdog: 4.52s, 8 snapshot requests, 2 command sends, pot 20, stack A 190

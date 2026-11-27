@@ -2,6 +2,37 @@ import {decode, validUnit} from "./state.mjs";
 
 export const reconnectDelay = attempt => Math.min(250 * 2 ** attempt, 2000);
 
+export function commandWatchdog(onTimeout, {
+  now = () => performance.now(),
+  schedule = (fn, delay) => setTimeout(fn, delay),
+  cancel = id => clearTimeout(id),
+  timeout = 4500,
+} = {}) {
+  let attempt = null;
+  return {
+    arm() {
+      if (attempt) return;
+      const current = {deadline: now() + timeout, timer: null};
+      attempt = current;
+      function check() {
+        if (attempt !== current) return;
+        const remaining = current.deadline - now();
+        if (remaining > 0) {
+          current.timer = schedule(check, remaining);
+          return;
+        }
+        attempt = null;
+        onTimeout();
+      }
+      current.timer = schedule(check, timeout);
+    },
+    clear() {
+      if (attempt) cancel(attempt.timer);
+      attempt = null;
+    },
+  };
+}
+
 export function socketURL(pageURL) {
   const url = new URL("./ws", pageURL);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";

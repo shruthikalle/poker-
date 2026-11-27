@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
-import {GameplayConnection, reconnectDelay, socketURL} from "../../server/static/js/network.mjs";
+import {commandWatchdog, GameplayConnection, reconnectDelay, socketURL} from "../../server/static/js/network.mjs";
 import {newAdmission, persist, restore, restoreAdmission} from "../../server/static/js/session.mjs";
 import {
   acceptsSnapshot, acknowledge, actionLabel, decode, offeredMoves, readAck,
@@ -194,6 +194,32 @@ test("socket authority, stale generation, bounded reconnect and replacement", ()
   assert.equal(timers.size, 0);
   conn.halt();
   assert.equal(conn.socket, null);
+});
+
+test("command recovery has one fixed monotonic deadline per transmission", () => {
+  let now = 0, timer, triggered = 0;
+  const watchdog = commandWatchdog(() => triggered++, {
+    now: () => now,
+    schedule(fn, delay) { timer = {fn, delay}; return timer; },
+    cancel() { timer = null; },
+  });
+  watchdog.arm();
+  const original = timer;
+  now = 2200;
+  watchdog.arm();
+  assert.equal(timer, original);
+  timer.fn();
+  assert.equal(timer.delay, 2300);
+  now = 5000;
+  timer.fn();
+  assert.equal(triggered, 1);
+  watchdog.arm();
+  assert.equal(timer.delay, 4500);
+  const obsolete = timer;
+  watchdog.clear();
+  obsolete.fn();
+  assert.equal(timer, null);
+  assert.equal(triggered, 1);
 });
 
 test("default scheduling preserves the browser global receiver", {concurrency: false}, () => {

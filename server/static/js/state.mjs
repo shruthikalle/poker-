@@ -119,7 +119,7 @@ export function acknowledge(pending, frame, snapshot) {
 }
 
 export function settleSnapshot(pending, snapshot) {
-  if (!pending) return {pending, expired: false};
+  if (!pending || snapshot.match_result) return {pending: null, expired: false};
   const expired = pending.command.hand_id < snapshot.hand_id - 1;
   const confirmed = pending.acceptedRevision !== null && snapshot.revision >= pending.acceptedRevision;
   return {pending: expired || confirmed ? null : pending, expired};

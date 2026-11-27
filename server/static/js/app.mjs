@@ -1,4 +1,4 @@
-import {admit, AdmissionRejected, GameplayConnection} from "./network.mjs";
+import {admit, AdmissionRejected, commandWatchdog, GameplayConnection} from "./network.mjs";
 import {newAdmission, persist, restore, restoreAdmission} from "./session.mjs";
 import {
   acceptsSnapshot, acknowledge, offeredMoves, readAck, readPending, readSnapshot,
@@ -14,8 +14,18 @@ const state = {...restore(storage), snapshot: null, sampledAt: 0, status: "idle"
 let admission = state.session ? null : restoreAdmission(storage);
 let link;
 let admissionPending = false;
-let commandTimer = null;
+let recoveryAttempts = 0;
 let displayTimer = null;
+const watchdog = commandWatchdog(() => {
+  if (recoveryAttempts >= 2) {
+    state.notice = "The server still has not confirmed the latest state. Reconnect to check it.";
+    link.halt("protocol");
+    return;
+  }
+  recoveryAttempts++;
+  state.notice = "Waiting for the server. Reconnecting to confirm the latest state.";
+  link.retryManually();
+});
 const errors = {
   INVALID_MESSAGE: "The server could not read the command.",
   ILLEGAL_ACTION: "The server rejected that action. Choose an available action.",
@@ -58,12 +68,9 @@ function draw() {
   }
 }
 
-function watchCommand(enabled) {
-  clearTimeout(commandTimer);
-  commandTimer = enabled ? setTimeout(() => {
-    state.notice = "Waiting for the server. Reconnecting to confirm the latest state.";
-    link.retryManually();
-  }, 4500) : null;
+function finishRecovery() {
+  watchdog.clear();
+  recoveryAttempts = 0;
 }
 
 function protocolError() {
@@ -86,8 +93,8 @@ function receive(frame) {
     }
     if (expired) state.notice = "An unconfirmed action expired. The current hand is up to date.";
     const first = link.synchronized(Boolean(incoming.match_result));
-    if (first && state.pending) link.send(state.pending.wire);
-    watchCommand(Boolean(state.pending));
+    if (first && state.pending && link.send(state.pending.wire)) watchdog.arm();
+    if (!state.pending) finishRecovery();
     draw();
   } else if (frame?.type === "action_ack") {
     if (!state.snapshot || !readAck(frame)) return protocolError();
@@ -97,10 +104,10 @@ function receive(frame) {
     if (result.error) {
       state.notice = errors[result.error] ?? "The server rejected the action.";
       state.recovering = true;
-      link.send({type: "snapshot_request"});
+      if (link.send({type: "snapshot_request"})) watchdog.arm();
     }
     save();
-    watchCommand(Boolean(state.pending || state.recovering));
+    if (!state.pending && !state.recovering) finishRecovery();
     draw();
   } else if (frame?.type === "error" && typeof frame.code === "string") {
     // A protocol error does not identify a pending command. Keep its original payload.
@@ -118,7 +125,7 @@ function connect() {
     token: state.session.session_token,
     onStatus(status) {
       state.status = status;
-      if (status !== "connected") watchCommand(false);
+      if (status !== "connected") watchdog.clear();
       if (status === "replaced") state.notice = "This seat is open in another tab. Reconnect here only if you want to take it back.";
       if (status === "unauthorized") state.notice = "This session is no longer valid. Leave the table to start again.";
       if (status === "offline" && !state.snapshot?.match_result) state.notice = "The server is unreachable. Reconnect to check your seat.";
@@ -134,7 +141,7 @@ function requestMove(move) {
   state.notice = "";
   state.pending = readPending(JSON.stringify(wireCommand(move, state.snapshot)));
   save();
-  if (link.send(state.pending.wire)) watchCommand(true);
+  if (link.send(state.pending.wire)) watchdog.arm();
   draw();
 }
 
@@ -218,6 +225,7 @@ byId("copy-code").addEventListener("click", async () => {
 });
 byId("reconnect").addEventListener("click", () => {
   state.notice = "";
+  finishRecovery();
   link.retryManually();
 });
 const dialog = byId("leave-dialog");
@@ -227,6 +235,7 @@ byId("leave").addEventListener("click", () => {
 });
 dialog.addEventListener("close", () => {
   if (dialog.returnValue !== "leave") return;
+  finishRecovery();
   Object.assign(state, {session: null, pending: null, snapshot: null, recovering: false, notice: ""});
   save();
   link.halt();
