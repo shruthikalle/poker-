@@ -66,6 +66,7 @@ export async function admit({kind, input, key}) {
   }
   if (!response.ok) {
     const message = {
+      "403:origin not allowed": "Open the poker table from its local server address.",
       "404:room not found": "Room code not found. Check the code and try again.",
       "409:an active room already exists": "An active room already exists. Join with its room code.",
       "409:room is full": "This room already has two players.",

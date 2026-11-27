@@ -23,6 +23,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from starlette.requests import HTTPConnection
 
 from server.clock import Clock
 from server.commands import COMMAND_SCHEMA
@@ -84,6 +85,8 @@ class AuthenticateMessage(BaseModel):
 
 
 def _admission_key(request: Request) -> str | None:
+    if not _allowed_origin(request):
+        raise HTTPException(403, "origin not allowed")
     keys = request.headers.getlist("admission-key")
     if not keys:
         return None
@@ -92,18 +95,28 @@ def _admission_key(request: Request) -> str | None:
     return keys[0]
 
 
-def _allowed_origin(origin: str | None) -> bool:
-    if origin is None:
+def _allowed_origin(connection: HTTPConnection) -> bool:
+    origins = connection.headers.getlist("origin")
+    if not origins:
         return True
+    if len(origins) != 1:
+        return False
     try:
-        parsed = urlsplit(origin)
+        origin = urlsplit(origins[0])
+        target = connection.url
+        scheme = {"ws": "http", "wss": "https"}.get(target.scheme, target.scheme)
+        default_port = 443 if scheme == "https" else 80
+        return (
+            origin.scheme == scheme
+            and origin.hostname in ("localhost", "127.0.0.1")
+            and origin.hostname == target.hostname
+            and (origin.port if origin.port is not None else default_port)
+            == (target.port if target.port is not None else default_port)
+            and origin.username is None
+            and not (origin.path or origin.query or origin.fragment)
+        )
     except ValueError:
         return False
-    return (
-        parsed.scheme in ("http", "https")
-        and parsed.hostname in ("localhost", "127.0.0.1")
-        and parsed.username is None
-    )
 
 
 def _parse_message(raw: str | None) -> dict[str, object] | None:
@@ -239,7 +252,11 @@ def create_app(
         "/api/rooms",
         status_code=201,
         response_model=AdmissionResponse,
-        responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        responses={
+            403: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
     )
     def create_room(
         body: CreateRoomRequest, request: Request, response: Response
@@ -263,6 +280,7 @@ def create_app(
         "/api/rooms/join",
         response_model=AdmissionResponse,
         responses={
+            403: {"model": ErrorResponse},
             404: {"model": ErrorResponse},
             409: {"model": ErrorResponse},
             422: {"model": ErrorResponse},
@@ -330,7 +348,7 @@ def create_app(
 
     @app.websocket("/ws")
     async def room_socket(socket: WebSocket) -> None:
-        if not _allowed_origin(socket.headers.get("origin")):
+        if not _allowed_origin(socket):
             await socket.close(code=1008)
             return
         await socket.accept()
