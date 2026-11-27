@@ -31,7 +31,11 @@ def admission(browser, kind, fixed, *, before=False, refresh=False):
                 status.append(None)
                 route.abort()
                 return
-            response = route.fetch()
+            try:
+                response = route.fetch()
+            except Exception:
+                # Playwright's error details can contain outgoing headers.
+                raise AssertionError("fixture could not forward admission") from None
             status.append(response.status)
             results.append(response.json())
             if len(status) == 1:
@@ -50,6 +54,7 @@ def admission(browser, kind, fixed, *, before=False, refresh=False):
             page.reload()
         if fixed:
             page.get_by_role("button", name="Retry admission").click()
+            expect(page.locator("#game")).to_be_visible()
             assert status == (
                 [None, 200 if kind == "join" else 201]
                 if before
@@ -60,7 +65,6 @@ def admission(browser, kind, fixed, *, before=False, refresh=False):
             assert bodies[0] == bodies[1] and headers[0] == headers[1] and headers[0]
             if not before:
                 assert results[0] == results[1]
-            expect(page.locator("#game")).to_be_visible()
             assert results[-1]["seat"] == ("B" if kind == "join" else "A")
         else:
             button.click()

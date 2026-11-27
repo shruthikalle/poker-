@@ -1,0 +1,3 @@
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+create: upstream statuses [None, 201], original seat A, ready=False, refresh=True

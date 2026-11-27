@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
 import {GameplayConnection, reconnectDelay, socketURL} from "../../server/static/js/network.mjs";
-import {persist, restore} from "../../server/static/js/session.mjs";
+import {newAdmission, persist, restore, restoreAdmission} from "../../server/static/js/session.mjs";
 import {
   acceptsSnapshot, acknowledge, actionLabel, decode, offeredMoves, readAck,
   readPending, readSnapshot, remainingMs, settleSnapshot, wireCommand,
@@ -102,6 +102,22 @@ test("session storage retains only seat metadata and exact unresolved payload", 
   assert.deepEqual(restore(storage), {session, pending});
   assert.ok(persist(storage, null, null));
   assert.deepEqual(restore(storage), {session: null, pending: null});
+});
+
+test("admission persistence recovers the exact operation and replaces it with seat identity", () => {
+  let stored;
+  const storage = {getItem: () => stored, setItem: (_, value) => { stored = value; }};
+  const intent = newAdmission("join", "ROOM42");
+  assert.match(intent.key, /^[0-9a-f]{64}$/);
+  assert.notEqual(intent.key, newAdmission("join", "ROOM42").key);
+  assert.equal(persist(storage, null, null, intent), true);
+  assert.deepEqual(restoreAdmission(storage), intent);
+  assert.deepEqual(restore(storage), {session: null, pending: null});
+  const seat = {seat: "B", room_code: "ROOM42", bet_unit: 10, session_token: "fixture-token"};
+  assert.equal(persist(storage, seat, null), true);
+  assert.equal(restoreAdmission(storage), null);
+  assert.equal(stored.includes(intent.key), false);
+  assert.deepEqual(restore(storage), {session: seat, pending: null});
 });
 
 test("monotonic sampling handles delays, pause, resume, and zero clamp", () => {

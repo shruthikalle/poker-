@@ -1,5 +1,5 @@
-import {admit, GameplayConnection} from "./network.mjs";
-import {persist, restore} from "./session.mjs";
+import {admit, AdmissionRejected, GameplayConnection} from "./network.mjs";
+import {newAdmission, persist, restore, restoreAdmission} from "./session.mjs";
 import {
   acceptsSnapshot, acknowledge, offeredMoves, readAck, readPending, readSnapshot,
   settleSnapshot, validUnit, wireCommand,
@@ -11,6 +11,7 @@ const storage = (() => {
 })();
 const state = {...restore(storage), snapshot: null, sampledAt: 0, status: "idle",
   recovering: false, notice: ""};
+let admission = state.session ? null : restoreAdmission(storage);
 let link;
 let admissionPending = false;
 let commandTimer = null;
@@ -29,13 +30,23 @@ const errors = {
 };
 
 function save() {
-  if (!persist(storage, state.session, state.pending) && state.session && !state.notice) {
+  if (!persist(storage, state.session, state.pending, admission) && state.session && !state.notice) {
     state.notice = "Refresh recovery is unavailable in this tab.";
   }
 }
 
 function draw() {
   renderTable(state);
+  byId("admission-forms").hidden = Boolean(admission);
+  byId("admission-recovery").hidden = !admission;
+  if (admission) {
+    byId("recovery-detail").textContent = admission.kind === "create"
+      ? "Retry the original room creation to recover the host seat."
+      : "Retry the original room join to recover the guest seat.";
+    const retry = byId("retry-admission");
+    retry.disabled = admissionPending;
+    retry.textContent = admissionPending ? "Confirming admission…" : "Retry admission";
+  }
   const view = state.snapshot;
   const needsDisplay = state.session && view && !view.match_result &&
     (view.turn_clock.status === "running" || view.disconnect_grace.A || view.disconnect_grace.B);
@@ -127,41 +138,57 @@ function requestMove(move) {
   draw();
 }
 
-function setAdmissionBusy(busy, form) {
-  for (const node of document.querySelectorAll("#create-form button, #join-form button")) {
-    node.disabled = busy;
-    const normal = node.closest("form").id === "create-form" ? "Create room" : "Join room";
-    node.textContent = busy && node.closest("form") === form ? `${normal === "Create room" ? "Creating" : "Joining"}…` : normal;
-  }
-}
-
-async function submitAdmission(event, kind) {
+function submitAdmission(event, kind) {
   event.preventDefault();
-  if (admissionPending || state.session) return;
+  if (admission || admissionPending || state.session) return;
   const input = kind === "create" ? Number(byId("bet-unit").value) : byId("room-input").value.trim();
   if (kind === "create" ? !validUnit(input) : !input || input.length > 128) {
     state.notice = kind === "create" ? "Choose an even bet unit from 2 to 20." : "Enter a valid room code.";
     draw();
     return;
   }
+  try {
+    admission = newAdmission(kind, input);
+  } catch {
+    state.notice = "Secure randomness is unavailable in this browser.";
+    draw();
+    return;
+  }
+  if (!persist(storage, null, null, admission)) {
+    admission = null;
+    state.notice = "Enable tab storage to reserve a room seat safely.";
+    draw();
+    return;
+  }
+  confirmAdmission();
+}
+
+async function confirmAdmission() {
+  if (!admission || admissionPending || state.session) return;
+  const {kind} = admission;
   admissionPending = true;
-  setAdmissionBusy(true, event.currentTarget);
   state.notice = "";
   draw();
   try {
-    state.session = await admit(kind, input);
+    state.session = await admit(admission);
+    admission = null;
     save();
     connect();
     byId("game-title").focus();
   } catch (error) {
+    if (error instanceof AdmissionRejected) {
+      admission = null;
+      save();
+    }
     state.notice = error.message;
-    draw();
   } finally {
     admissionPending = false;
-    setAdmissionBusy(false, null);
+    draw();
+    if (!state.session) byId(admission ? "retry-admission" : kind === "create" ? "bet-unit" : "room-input").focus();
   }
 }
 
+byId("retry-admission").addEventListener("click", confirmAdmission);
 byId("create-form").addEventListener("submit", event => submitAdmission(event, "create"));
 byId("join-form").addEventListener("submit", event => submitAdmission(event, "join"));
 byId("bet-unit").addEventListener("change", event => {

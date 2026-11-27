@@ -24,7 +24,12 @@
         <p class="lede">Play a private game of fixed-limit Texas Hold’em with a friend. Share a room code to get started.</p>
         <details class="rules"><summary>Table rules</summary><p>Play with virtual chips. The host chooses a fixed bet unit, and each player starts with 20 units. The small blind is half a unit, and the big blind is one unit. Each street allows two raises after the opener. There are no all-ins or side pots.</p></details>
       </div>
-      <div class="admission">
+      <section id="admission-recovery" class="panel" aria-labelledby="recovery-title" hidden>
+        <h2 id="recovery-title">Confirm room admission</h2>
+        <p id="recovery-detail"></p>
+        <button id="retry-admission" class="primary" type="button">Retry admission</button>
+      </section>
+      <div id="admission-forms" class="admission">
         <form id="create-form" class="panel">
           <h2>Create a room</h2>
           <label for="bet-unit">Bet unit</label>

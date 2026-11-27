@@ -3,6 +3,7 @@
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
+from hashlib import sha256
 from secrets import compare_digest, token_urlsafe
 from threading import RLock
 from typing import Literal
@@ -25,6 +26,10 @@ class RoomNotFound(Exception):
 
 
 class RoomFull(Exception):
+    pass
+
+
+class AdmissionConflict(Exception):
     pass
 
 
@@ -73,6 +78,29 @@ class RoomManager:
         self._deck = deck
         self._lock = RLock()
         self._room: Room | None = None
+        self._admissions: list[tuple[bytes, tuple[str, int | str], Admission]] = []
+
+    def admit_once(
+        self,
+        identifier: str | None,
+        request: tuple[str, int | str],
+        allocate: Callable[[], Admission],
+    ) -> Admission:
+        """Retain only successful keyed admissions for this room's lifetime."""
+        if identifier is None:
+            return allocate()
+        digest = sha256(identifier.encode("ascii")).digest()
+        with self._lock:
+            for previous, intent, admission in self._admissions:
+                if compare_digest(digest, previous):
+                    if intent != request:
+                        raise AdmissionConflict
+                    return admission
+            admission = allocate()
+            # Allocation itself enforces the two-seat limit. Failed allocation
+            # leaves the replay records untouched.
+            self._admissions.append((digest, request, admission))
+            return admission
 
     def create(self, bet_unit: object) -> Admission:
         if type(bet_unit) is not int or not 2 <= bet_unit <= 20 or bet_unit % 2:

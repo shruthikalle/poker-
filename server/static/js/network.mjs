@@ -14,29 +14,40 @@ export function validSession(value) {
     typeof value.session_token === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value.session_token);
 }
 
-export async function admit(kind, input) {
-  let response;
+export class AdmissionRejected extends Error {}
+
+export async function admit({kind, input, key}) {
+  let response, data;
+  const uncertain = "The server did not confirm admission. Retry the same request. A server restart can erase its recovery record.";
   try {
     response = await fetch(kind === "create" ? "./api/rooms" : "./api/rooms/join", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: {"Content-Type": "application/json", "Admission-Key": key},
       body: JSON.stringify(kind === "create" ? {bet_unit: input} : {room_code: input}),
       signal: AbortSignal.timeout(8000),
+      mode: "same-origin",
+      redirect: "error",
     });
+    data = await response.json();
   } catch {
-    throw new Error("The server did not confirm admission. Check your connection. If the request reached the server, an already allocated seat may need a server restart.");
+    throw new Error(uncertain);
   }
   if (!response.ok) {
     const message = {
-      404: "Room code not found. Check the code and try again.",
-      409: kind === "create" ? "An active room already exists. Join with its room code." :
-        "This room already has two players.",
-      422: kind === "create" ? "Choose an even bet unit from 2 to 20." : "Enter a valid room code.",
-    }[response.status];
-    throw new Error(message ?? "The server could not confirm admission. The seat may already have been allocated.");
+      "404:room not found": "Room code not found. Check the code and try again.",
+      "409:an active room already exists": "An active room already exists. Join with its room code.",
+      "409:room is full": "This room already has two players.",
+      "409:admission key conflict": "The recovery request conflicts with an existing admission.",
+      "422:invalid admission key": "The admission recovery key is invalid.",
+      "422:invalid request body": kind === "create"
+        ? "Choose an even bet unit from 2 to 20." : "Enter a valid room code.",
+    }[`${response.status}:${data?.detail}`];
+    if (message) throw new AdmissionRejected(message);
+    throw new Error(uncertain);
   }
-  const data = await response.json().catch(() => null);
-  if (!validSession(data)) throw new Error("The server returned an invalid admission response.");
+  if (!validSession(data) || data.seat !== (kind === "create" ? "A" : "B")) {
+    throw new Error(uncertain);
+  }
   const {seat, room_code, session_token, bet_unit} = data;
   return {seat, room_code, session_token, bet_unit};
 }

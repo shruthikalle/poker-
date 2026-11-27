@@ -1,6 +1,7 @@
 """HTTP and WebSocket transport for the poker application."""
 
 import json
+import re
 from asyncio import wait_for
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -33,6 +34,7 @@ from server.sessions import SessionError, SessionStore
 from .engine import Player
 from .rooms import (
     Admission,
+    AdmissionConflict,
     InvalidBetUnit,
     RoomAlreadyExists,
     RoomFull,
@@ -79,6 +81,15 @@ class AuthenticateMessage(BaseModel):
         pattern=r"^[A-Za-z0-9_-]+$",
         repr=False,
     )
+
+
+def _admission_key(request: Request) -> str | None:
+    keys = request.headers.getlist("admission-key")
+    if not keys:
+        return None
+    if len(keys) != 1 or re.fullmatch(r"[0-9a-f]{64}", keys[0]) is None:
+        raise HTTPException(422, "invalid admission key")
+    return keys[0]
 
 
 def _allowed_origin(origin: str | None) -> bool:
@@ -230,13 +241,21 @@ def create_app(
         response_model=AdmissionResponse,
         responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
     )
-    def create_room(body: CreateRoomRequest, response: Response) -> Admission:
+    def create_room(
+        body: CreateRoomRequest, request: Request, response: Response
+    ) -> Admission:
         try:
-            admission = manager.create(body.bet_unit)
+            admission = manager.admit_once(
+                _admission_key(request),
+                ("create", body.bet_unit),
+                lambda: manager.create(body.bet_unit),
+            )
         except InvalidBetUnit as exc:
             raise HTTPException(422, "invalid request body") from exc
         except RoomAlreadyExists as exc:
             raise HTTPException(409, str(exc)) from exc
+        except AdmissionConflict as exc:
+            raise HTTPException(409, "admission key conflict") from exc
         response.headers["Cache-Control"] = "no-store"
         return admission
 
@@ -249,13 +268,21 @@ def create_app(
             422: {"model": ErrorResponse},
         },
     )
-    async def join_room(body: JoinRoomRequest, response: Response) -> Admission:
+    async def join_room(
+        body: JoinRoomRequest, request: Request, response: Response
+    ) -> Admission:
         try:
-            admission = coordinator.admit(manager.join, body.room_code)
+            admission = manager.admit_once(
+                _admission_key(request),
+                ("join", body.room_code),
+                lambda: coordinator.admit(manager.join, body.room_code),
+            )
         except RoomNotFound as exc:
             raise HTTPException(404, str(exc)) from exc
         except RoomFull as exc:
             raise HTTPException(409, str(exc)) from exc
+        except AdmissionConflict as exc:
+            raise HTTPException(409, "admission key conflict") from exc
         response.headers["Cache-Control"] = "no-store"
         return admission
 
