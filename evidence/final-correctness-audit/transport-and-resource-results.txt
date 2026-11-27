@@ -1,0 +1,40 @@
+$ uv run --offline --locked python -W error -m unittest discover -s tests -p test_final_transport.py -v
+
+Run 1
+test_distinct_keys_and_legacy_join_share_capacity (test_final_transport.AdmissionRaceTests.test_distinct_keys_and_legacy_join_share_capacity) ... ok
+test_replay_and_conflicting_reuse_race_with_first_socket (test_final_transport.AdmissionRaceTests.test_replay_and_conflicting_reuse_race_with_first_socket) ... ok
+test_scheduler_cancels_on_app_shutdown_across_lifecycles (test_final_transport.LifespanAuditTests.test_scheduler_cancels_on_app_shutdown_across_lifecycles) ... ok
+test_fifty_replacements_retire_writers_and_bound_replay (test_final_transport.ResourceAuditTests.test_fifty_replacements_retire_writers_and_bound_replay) ... Resource audit: 50 replacements; peak tracked writers 3; active writers 0 after shutdown; sampled attach queue peak 1/32; peak retained accepted commands 3
+ok
+test_run_cancels_blocked_writer_and_reader (test_final_transport.ResourceAuditTests.test_run_cancels_blocked_writer_and_reader) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.155s
+
+OK
+
+Run 2
+test_distinct_keys_and_legacy_join_share_capacity (test_final_transport.AdmissionRaceTests.test_distinct_keys_and_legacy_join_share_capacity) ... ok
+test_replay_and_conflicting_reuse_race_with_first_socket (test_final_transport.AdmissionRaceTests.test_replay_and_conflicting_reuse_race_with_first_socket) ... ok
+test_scheduler_cancels_on_app_shutdown_across_lifecycles (test_final_transport.LifespanAuditTests.test_scheduler_cancels_on_app_shutdown_across_lifecycles) ... ok
+test_fifty_replacements_retire_writers_and_bound_replay (test_final_transport.ResourceAuditTests.test_fifty_replacements_retire_writers_and_bound_replay) ... Resource audit: 50 replacements; peak tracked writers 3; active writers 0 after shutdown; sampled attach queue peak 1/32; peak retained accepted commands 3
+ok
+test_run_cancels_blocked_writer_and_reader (test_final_transport.ResourceAuditTests.test_run_cancels_blocked_writer_and_reader) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.148s
+
+OK
+
+Run 3
+test_distinct_keys_and_legacy_join_share_capacity (test_final_transport.AdmissionRaceTests.test_distinct_keys_and_legacy_join_share_capacity) ... ok
+test_replay_and_conflicting_reuse_race_with_first_socket (test_final_transport.AdmissionRaceTests.test_replay_and_conflicting_reuse_race_with_first_socket) ... ok
+test_scheduler_cancels_on_app_shutdown_across_lifecycles (test_final_transport.LifespanAuditTests.test_scheduler_cancels_on_app_shutdown_across_lifecycles) ... ok
+test_fifty_replacements_retire_writers_and_bound_replay (test_final_transport.ResourceAuditTests.test_fifty_replacements_retire_writers_and_bound_replay) ... Resource audit: 50 replacements; peak tracked writers 3; active writers 0 after shutdown; sampled attach queue peak 1/32; peak retained accepted commands 3
+ok
+test_run_cancels_blocked_writer_and_reader (test_final_transport.ResourceAuditTests.test_run_cancels_blocked_writer_and_reader) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.168s
+
+OK
