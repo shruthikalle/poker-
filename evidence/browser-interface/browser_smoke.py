@@ -1,4 +1,4 @@
-"""Run credential-free Chromium acceptance scenarios against the real app."""
+"""Run credential-free browser acceptance scenarios against the real app."""
 
 import argparse
 import json
@@ -18,10 +18,11 @@ CHECK_PATH = ("A", "B", "B", "A", "B", "A", "B", "A")
 
 
 @contextmanager
-def server(factory):
-    with socket.socket() as port:
-        port.bind(("127.0.0.1", 0))
-        _, number = port.getsockname()
+def server(factory, number=None):
+    if number is None:
+        with socket.socket() as port:
+            port.bind(("127.0.0.1", 0))
+            _, number = port.getsockname()
     base = f"http://127.0.0.1:{number}"
     cmd = [
         sys.executable,
@@ -129,10 +130,17 @@ def verify_wire(traces, scenario):
 
 
 def table(
-    browser, base, *, screenshots=None, configure=None, narrow=False, stacks=(195, 190)
+    browser,
+    base,
+    *,
+    screenshots=None,
+    configure=None,
+    narrow=False,
+    stacks=(195, 190),
+    peer_browser=None,
 ):
     host_context = browser.new_context(viewport={"width": 1200, "height": 900})
-    guest_context = browser.new_context(
+    guest_context = (peer_browser or browser).new_context(
         viewport={"width": 390 if narrow else 1200, "height": 900}
     )
     a, b = host_context.new_page(), guest_context.new_page()
@@ -459,7 +467,7 @@ def check_errors(browser, base):
 
         page.route_web_socket("**/ws", invalid_auth)
         page.reload()
-        page.get_by_role("button", name="Create room").click()
+        page.get_by_role("button", name="Retry admission").click()
         wait_text(page, "#connection-label", "Session expired")
         expect(page.get_by_role("button", name="Reconnect", exact=True)).to_be_hidden()
         page.get_by_role("button", name="Leave table", exact=True).click()
@@ -501,13 +509,16 @@ def main():
     )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenario", choices=choices, nargs="+", default=choices)
+    parser.add_argument(
+        "--browser", choices=("chromium", "firefox", "webkit"), default="chromium"
+    )
     parser.add_argument("--screenshots", type=Path)
     args = parser.parse_args()
     if args.screenshots:
         args.screenshots.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
-        print(f"Chromium {browser.version}", flush=True)
+        browser = getattr(playwright, args.browser).launch()
+        print(f"{args.browser} {browser.version}", flush=True)
         for name in args.scenario:
             run_scenario(browser, name, args.screenshots)
             print(f"PASS {name}", flush=True)

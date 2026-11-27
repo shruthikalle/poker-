@@ -11,6 +11,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 280px; }
 [hidden] { display: none !important; }
+.visually-hidden, .notice:empty, #automatic:empty { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .site-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem max(1rem, calc((100vw - 1200px)/2)); border-bottom: 1px solid var(--line); }
 .brand { font-weight: 750; font-size: .95rem; display: flex; align-items: center; gap: .65rem; }
 .brand-mark { display: grid; place-items: center; background: var(--gold); color: #172419; border-radius: .45rem; width: 2rem; height: 2rem; font-size: 1.35rem; }
@@ -34,7 +35,7 @@ summary { cursor: pointer; color: #e5d7b5; }
 .panel { padding: 1.15rem; background: var(--panel); border: 1px solid var(--line); border-radius: .75rem; min-width: 0; }
 .admission, .rail { display: grid; gap: .8rem; }
 label { display: block; margin-bottom: .4rem; color: var(--muted); font-size: .85rem; }
-input, select, button { border: 1px solid #617166; border-radius: .4rem; font: inherit; min-height: 2.65rem; padding: .48rem .7rem; }
+input, select, button { border: 1px solid #829488; border-radius: .4rem; font: inherit; min-height: 2.75rem; padding: .48rem .7rem; }
 input, select { width: 100%; background: #111a16; color: #f3efe4; }
 button { color: #f1f4eb; background: #293b31; cursor: pointer; font-weight: 700; }
 button:hover:not(:disabled) { background: #385346; }
@@ -54,7 +55,7 @@ dt { font-size: .75rem; color: var(--muted); } dd { margin: .25rem 0 0; font-wei
 .room-id { border: 1px solid var(--line); border-radius: .45rem; padding: .25rem .35rem .25rem .65rem; }
 .room-id span { font-size: .75rem; color: var(--muted); }
 .room-id code { color: var(--gold); overflow-wrap: anywhere; }
-.room-id button, .quiet { min-height: 2.2rem; padding: .24rem .5rem; font-size: .8rem; }
+.room-id button, .quiet { min-width: 2.75rem; padding: .24rem .5rem; font-size: .8rem; }
 .quiet { background: transparent; }
 .waiting { padding: 1.6rem; max-width: 44rem; }
 .waiting p, .rail p { color: var(--muted); }
@@ -81,7 +82,7 @@ dt { font-size: .75rem; color: var(--muted); } dd { margin: .25rem 0 0; font-wei
 dialog { width: min(calc(100vw - 2rem), 30rem); padding: 1.3rem; border: 1px solid var(--line); background: var(--panel); color: inherit; border-radius: .75rem; }
 dialog::backdrop { background: #070e0bc9; }
 .dialog-actions { display: flex; justify-content: end; gap: .5rem; }
-@media (max-width: 740px) {
+@media (max-width: 820px) {
   .landing, .table-layout { grid-template-columns: 1fr; }
   .landing { margin-top: .7rem; }
   .felt { border-radius: 2rem; }

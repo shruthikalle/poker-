@@ -16,6 +16,7 @@ let link;
 let admissionPending = false;
 let recoveryAttempts = 0;
 let displayTimer = null;
+let lastTouch = null;
 const watchdog = commandWatchdog(() => {
   if (recoveryAttempts >= 2) {
     state.notice = "The server still has not confirmed the latest state. Reconnect to check it.";
@@ -46,7 +47,17 @@ function save() {
 }
 
 function draw() {
+  const focused = document.activeElement;
+  const result = byId("result-title");
+  const previousResult = byId("result").hidden ? "" : result.textContent;
   renderTable(state);
+  if (focused?.matches("#actions button") && (focused.disabled || focused.hidden)) {
+    byId("action-status").focus({preventScroll: true});
+  }
+  if (document.activeElement === byId("action-status") && !byId("result").hidden &&
+      result.textContent !== previousResult) {
+    result.focus({preventScroll: true});
+  }
   byId("admission-forms").hidden = Boolean(admission);
   byId("admission-recovery").hidden = !admission;
   if (admission) {
@@ -208,7 +219,14 @@ byId("bet-unit").addEventListener("change", event => {
 });
 byId("actions").addEventListener("click", event => {
   const button = event.target.closest("button[data-action]");
-  if (button && !button.disabled) requestMove(button.dataset.action);
+  if (!button || button.disabled) return;
+  const move = button.dataset.action;
+  if (event.pointerType === "touch") {
+    const now = performance.now();
+    if (lastTouch?.move === move && now - lastTouch.at < 350) return;
+    lastTouch = {move, at: now};
+  }
+  requestMove(move);
 });
 byId("copy-code").addEventListener("click", async () => {
   try {
@@ -225,6 +243,11 @@ byId("copy-code").addEventListener("click", async () => {
   draw();
 });
 byId("reconnect").addEventListener("click", () => {
+  if (navigator.onLine === false) {
+    state.notice = "The browser reports that it is offline. Reconnect to your network first.";
+    draw();
+    return;
+  }
   state.notice = "";
   finishRecovery();
   link.retryManually();
@@ -236,6 +259,7 @@ byId("leave").addEventListener("click", () => {
 });
 dialog.addEventListener("close", () => {
   if (dialog.returnValue !== "leave") return;
+  lastTouch = null;
   finishRecovery();
   Object.assign(state, {session: null, pending: null, snapshot: null, recovering: false, notice: ""});
   save();

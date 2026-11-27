@@ -13,6 +13,7 @@ const lifecycleLabels = {
   waiting: "Waiting room", awaiting_players: "Table forming", active: "Hand in play",
   paused: "Hand paused", between_hands: "Between hands", complete: "Match complete",
 };
+const cardGroups = new WeakMap();
 
 export const byId = id => document.getElementById(id);
 function text(id, value) {
@@ -23,9 +24,13 @@ function text(id, value) {
 function card(value, kind) {
   const node = document.createElement("span");
   node.className = `card ${kind}`;
+  if (kind === "empty") {
+    node.setAttribute("aria-hidden", "true");
+    return node;
+  }
   node.setAttribute("role", "img");
-  if (!value) {
-    node.setAttribute("aria-label", kind === "back" ? "Face-down card" : "Undealt community card");
+  if (kind === "back") {
+    node.setAttribute("aria-label", "Face-down card");
     return node;
   }
   const [rank, suit] = value;
@@ -42,8 +47,11 @@ function card(value, kind) {
 
 function updateCards(id, values, slots, hiddenStyle) {
   const group = byId(id);
+  const signature = values.join(",");
+  if (group.childElementCount === slots && cardGroups.get(group) === signature) return;
   group.replaceChildren(...Array.from({length: slots}, (_, i) =>
     card(values[i], values[i] ? "face" : hiddenStyle)));
+  cardGroups.set(group, signature);
 }
 
 function markers(view, seat) {
@@ -83,9 +91,10 @@ export function renderTable(state) {
   byId("landing").hidden = Boolean(session);
   byId("game").hidden = !session;
   byId("connection-label").hidden = !session;
-  byId("notice").hidden = !state.notice;
   text("notice", state.notice);
   if (!session) {
+    text("announcements", "");
+    text("automatic", "");
     for (const id of ["board", "your-cards", "opponent-cards"]) byId(id).replaceChildren();
     return;
   }
@@ -103,6 +112,7 @@ export function renderTable(state) {
     waiting.querySelector("h2").textContent = view ? "Waiting for opponent" : connectionLabels[status];
     waiting.querySelector("p").textContent = view ? "Share the room code with a friend. The first turn starts when both players are connected." :
       status === "unauthorized" ? "Leave this table to clear the expired session." : "Your table will appear after the server confirms your seat.";
+    text("announcements", status === "connected" && view ? "Waiting for opponent." : "");
     return;
   }
 
@@ -136,10 +146,10 @@ export function renderTable(state) {
   byId("presence").hidden = terminal;
   text("presence", !authoritative ? "Current opponent status is unknown." :
     view.presence[opponent] ? "Opponent connected" : "Opponent disconnected");
-  byId("automatic").hidden = !view.last_automatic_action;
-  if (view.last_automatic_action) {
-    const {seat, action} = view.last_automatic_action;
-    text("automatic", `Player ${seat} timed out. The server applied ${action}.`);
+  if (authoritative) {
+    const automatic = view.last_automatic_action;
+    text("automatic", automatic
+      ? `Player ${automatic.seat} timed out. The server applied ${automatic.action}.` : "");
   }
 
   const result = handResult(view);
@@ -151,6 +161,9 @@ export function renderTable(state) {
       : "";
     text("result-detail", result[1] + lastHand);
   }
+  const presence = view.presence[opponent] ? "Opponent connected." : "Opponent disconnected.";
+  text("announcements", terminal ? result[0] : status !== "connected" ? "" :
+    `${presence} ${result?.[0] ?? turn}`);
   const moves = offeredMoves(view, status === "connected", pending, recovering);
   text("action-status", pending ? "Waiting for server confirmation…" : recovering ? "Synchronizing…" :
     terminal ? "This match is complete." : view.ready_seats[view.seat] ? "Waiting for the other player to Ready." :

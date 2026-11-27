@@ -1,0 +1,4 @@
+First check on the mobile emulated guest before adding the touch repeat guard.
+touch double-tap: sent actions ['check', 'check']
+Same check after the touch repeat guard.
+touch double-tap: sent actions ['check']

@@ -1,0 +1,2 @@
+touch double-tap: sent actions ['check']
+usability: 6 viewports, 200% root text, keyboard showdown and Ready, touch action 156×44; contrast red card 6.00:1, action 10.70:1, focus 10.44:1

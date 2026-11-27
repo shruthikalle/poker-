@@ -15,7 +15,8 @@
     <span id="connection-label" class="status-pill" role="status" hidden></span>
   </header>
   <main>
-    <p id="notice" class="notice" role="alert" hidden></p>
+    <p id="notice" class="notice" role="alert"></p>
+    <p id="announcements" class="visually-hidden" role="status" aria-atomic="true"></p>
     <section id="landing" class="landing" aria-labelledby="title">
       <div class="hero">
         <div class="hero-cards" aria-hidden="true"><span>A<small>♥</small></span><span>K<small>♠</small></span></div>
@@ -67,14 +68,14 @@
           <section class="seat" id="opponent" aria-labelledby="opponent-name">
             <div class="seat-label"><h2 id="opponent-name">Opponent</h2><span id="opponent-markers"></span></div>
             <div id="opponent-stack" class="chips"></div>
-            <div class="cards" id="opponent-cards" aria-label="Opponent cards"></div>
+            <div class="cards" id="opponent-cards" role="group" aria-label="Opponent cards"></div>
           </section>
           <section class="community" aria-label="Community cards and pot">
             <div class="pot"><span>Pot</span> <strong id="pot"></strong></div>
-            <div class="cards" id="board" aria-label="Community cards"></div>
+            <div class="cards" id="board" role="group" aria-label="Community cards"></div>
           </section>
           <section class="seat" id="you" aria-labelledby="your-name">
-            <div class="cards" id="your-cards" aria-label="Your cards"></div>
+            <div class="cards" id="your-cards" role="group" aria-label="Your cards"></div>
             <div class="seat-label"><h2 id="your-name">You</h2><span id="your-markers"></span></div>
             <div id="your-stack" class="chips"></div>
           </section>
@@ -82,19 +83,19 @@
         <aside class="rail" aria-label="Table status and actions">
           <section class="panel turn">
             <p id="lifecycle" class="eyebrow"></p>
-            <h2 id="turn-status" role="status">Connecting</h2>
+            <h2 id="turn-status">Connecting</h2>
             <div class="clock" id="turn-clock" aria-label="Turn time remaining" hidden></div>
             <progress id="turn-progress" aria-label="Turn time estimate" max="30000" value="0" hidden></progress>
             <p id="presence"></p>
             <div id="grace" hidden><p id="grace-a" hidden></p><p id="grace-b" hidden></p></div>
-            <p id="automatic" hidden></p>
+            <p id="automatic" role="status"></p>
           </section>
           <section id="result" class="panel result" aria-labelledby="result-title" hidden>
-            <h2 id="result-title"></h2><p id="result-detail"></p>
+            <h2 id="result-title" tabindex="-1"></h2><p id="result-detail"></p>
           </section>
           <section class="panel controls">
             <h2>Actions</h2>
-            <p id="action-status" role="status"></p>
+            <p id="action-status" role="status" tabindex="-1"></p>
             <div class="action-grid" id="actions">
               <button type="button" data-action="fold">Fold</button>
               <button type="button" data-action="check">Check</button>
