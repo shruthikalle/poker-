@@ -6,6 +6,13 @@ The integrated development app runs the existing configurable-bet-unit engine th
 
 Team: Srishruthik Alle and Deepthi Morusupalli, CS 378 Agentic Software Engineering.
 
+The original proposal described friends playing remotely. The delivered
+workflow uses two independent browser sessions on a trusted loopback
+server. The project retains fixed-limit betting and adds Ready, reconnect,
+and authoritative deadlines. The public repository is the code and
+evidence handoff, with final rule approval recorded separately.
+[Final submission evidence](evidence/submission-readiness/evidence-manifest.md)
+
 ## Implemented rules and target draft
 
 The numerical fixtures below describe the current engine. [The target rule draft](docs/rules.md) proposes fixed 500-chip stacks, 5/10 blinds, street-dependent increments, three raises, burns, and the odd chip going to the nondealer. Joint approval to replace the draft is pending. The reconciliation proposed for approval retains the engine and the rule table below as the only active specification. [Exact proposed documentation replacement](docs/rules-reconciliation.md) The current app uses the configurable unit and defaults to 10 when creating through the lobby API.
