@@ -25,7 +25,6 @@ const watchdog = commandWatchdog(() => {
     return;
   }
   recoveryAttempts++;
-  state.notice = "Waiting for the server. Reconnecting to confirm the latest state.";
   link.retryManually();
 });
 const errors = {
@@ -148,9 +147,6 @@ function connect() {
     onStatus(status) {
       state.status = status;
       if (status !== "connected") watchdog.clear();
-      if (status === "replaced") state.notice = "This seat is open in another tab. Reconnect here only if you want to take it back.";
-      if (status === "unauthorized") state.notice = "This session is no longer valid. Leave the table to start again.";
-      if (status === "offline" && !state.snapshot?.match_result) state.notice = "The server is unreachable. Reconnect to check your seat.";
       draw();
     },
     onFrame: receive,
@@ -266,15 +262,16 @@ byId("copy-code").addEventListener("click", async () => {
   }
   draw();
 });
-byId("reconnect").addEventListener("click", () => {
+byId("reconnect").addEventListener("click", event => {
   if (navigator.onLine === false) {
-    state.notice = "The browser reports that it is offline. Reconnect to your network first.";
     draw();
     return;
   }
+  const returnFocus = document.activeElement === event.currentTarget;
   state.notice = "";
   finishRecovery();
   link.retryManually();
+  if (returnFocus) byId("game-title").focus();
 });
 const dialog = byId("leave-dialog");
 byId("leave").addEventListener("click", () => {

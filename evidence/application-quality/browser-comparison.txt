@@ -1,0 +1,36 @@
+Before: c9f7a1bc7bafcee278008589d6847039bcc17cba (cleanup only, original browser implementation)
+$ python evidence/application-quality/player_journey.py --observe-before
+chromium 140.0.7339.16
+offline waiting heading: Waiting for opponent
+fresh table heading after leaving an old hand: Hand 1 · Hand settled
+offline active-seat highlights: 1
+notice after automatic recovery: The server is unreachable. Reconnect to check your seat.
+keyboard focus after reclaiming replaced seat: body
+six viewports; two seats; betting, raise, showdown, fold, Ready, reconnect, and forfeit verified
+
+$ python evidence/application-quality/player_journey.py --browser chromium
+chromium 140.0.7339.16
+offline waiting heading: Offline
+fresh table heading after leaving an old hand: Private table
+offline active-seat highlights: 0
+notice after automatic recovery: (empty)
+keyboard focus after reclaiming replaced seat: game-title
+six viewports; two seats; betting, raise, showdown, fold, Ready, reconnect, and forfeit verified
+
+$ python evidence/application-quality/player_journey.py --browser firefox
+firefox 141.0
+offline waiting heading: Offline
+fresh table heading after leaving an old hand: Private table
+offline active-seat highlights: 0
+notice after automatic recovery: (empty)
+keyboard focus after reclaiming replaced seat: game-title
+six viewports; two seats; betting, raise, showdown, fold, Ready, reconnect, and forfeit verified
+
+$ python evidence/application-quality/player_journey.py --browser webkit
+webkit 26.0
+offline waiting heading: Offline
+fresh table heading after leaving an old hand: Private table
+offline active-seat highlights: 0
+notice after automatic recovery: (empty)
+keyboard focus after reclaiming replaced seat: game-title
+six viewports; two seats; betting, raise, showdown, fold, Ready, reconnect, and forfeit verified

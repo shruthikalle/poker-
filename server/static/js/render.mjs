@@ -9,6 +9,10 @@ const connectionLabels = {
   connected: "Connected", reconnecting: "Reconnecting", replaced: "Session replaced",
   unauthorized: "Session expired", offline: "Offline", protocol: "Synchronization unavailable",
 };
+const connectionNotices = {
+  replaced: "This seat is open in another tab. Reconnect here only if you want to take it back.",
+  unauthorized: "This session is no longer valid. Leave the table to start again.",
+};
 const lifecycleLabels = {
   waiting: "Waiting room", awaiting_players: "Table forming", active: "Hand in play",
   paused: "Hand paused", between_hands: "Between hands", complete: "Match complete",
@@ -54,13 +58,13 @@ function updateCards(id, values, slots, hiddenStyle) {
   cardGroups.set(group, signature);
 }
 
-function markers(view, seat) {
+function markers(view, seat, acting) {
   const indicators = [];
   if (view.button === seat) indicators.push("Dealer");
   if (view.phase === "preflop" && !view.match_result) {
     indicators.push(view.button === seat ? "Small blind seat" : "Big blind seat");
   }
-  if (view.actor === seat && view.lifecycle === "active") indicators.push("Acting");
+  if (acting) indicators.push("Acting");
   if (view.ready_seats[seat]) indicators.push("Ready");
   return indicators.join(" · ");
 }
@@ -91,7 +95,12 @@ export function renderTable(state) {
   byId("landing").hidden = Boolean(session);
   byId("game").hidden = !session;
   byId("connection-label").hidden = !session;
-  text("notice", state.notice);
+  const connectionNotice = status === "offline" && !view?.match_result
+    ? navigator.onLine === false
+      ? "The browser reports that it is offline. Reconnect to your network first."
+      : "The server is unreachable. Reconnect to check your seat."
+    : connectionNotices[status];
+  text("notice", (session && connectionNotice) || state.notice);
   if (!session) {
     text("announcements", "");
     text("automatic", "");
@@ -108,25 +117,29 @@ export function renderTable(state) {
   byId("waiting").hidden = hasHand;
   byId("table-layout").hidden = !hasHand;
   if (!hasHand) {
+    text("game-title", "Private table");
     const waiting = byId("waiting");
-    waiting.querySelector("h2").textContent = view ? "Waiting for opponent" : connectionLabels[status];
-    waiting.querySelector("p").textContent = view ? "Share the room code with a friend. The first turn starts when both players are connected." :
-      status === "unauthorized" ? "Leave this table to clear the expired session." : "Your table will appear after the server confirms your seat.";
-    text("announcements", status === "connected" && view ? "Waiting for opponent." : "");
+    const waitingForOpponent = status === "connected" && view;
+    waiting.querySelector("h2").textContent = waitingForOpponent ? "Waiting for opponent" : connectionLabels[status];
+    waiting.querySelector("p").textContent = waitingForOpponent
+      ? "Share the room code. On this device, join from a separately opened tab or browser profile. The first turn starts when both players connect."
+      : status === "unauthorized" ? "Leave this table to clear the expired session." : "Room status will update when this seat reconnects.";
+    text("announcements", waitingForOpponent ? "Waiting for opponent." : "");
     return;
   }
 
   const opponent = view.seat === "A" ? "B" : "A";
+  const actor = status === "connected" && view.lifecycle === "active" ? view.actor : null;
   text("game-title", `Hand ${view.hand_id} · ${streets[view.phase]}`);
   text("your-name", `You · Player ${view.seat}`);
   text("opponent-name", `Opponent · Player ${opponent}`);
-  text("your-markers", markers(view, view.seat));
-  text("opponent-markers", markers(view, opponent));
+  text("your-markers", markers(view, view.seat, actor === view.seat));
+  text("opponent-markers", markers(view, opponent, actor === opponent));
   text("your-stack", `${view.stacks[view.seat]} chips`);
   text("opponent-stack", `${view.stacks[opponent]} chips`);
   text("pot", `${view.pot} chips`);
-  byId("you").classList.toggle("acting", view.lifecycle === "active" && view.actor === view.seat);
-  byId("opponent").classList.toggle("acting", view.lifecycle === "active" && view.actor === opponent);
+  byId("you").classList.toggle("acting", actor === view.seat);
+  byId("opponent").classList.toggle("acting", actor === opponent);
   updateCards("your-cards", view.own_hole_cards, 2, "empty");
   const revealed = view.result?.showdown_hole_cards?.[opponent] ?? [];
   updateCards("opponent-cards", revealed, 2, "back");
