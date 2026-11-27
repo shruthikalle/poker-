@@ -1,0 +1,26 @@
+Real browser faults on archived b051973 and fixed application, using the same recovery probe
+create: upstream statuses [201, 409], original seat A, ready=False, refresh=False
+join: upstream statuses [200, 409], original seat B, ready=True, refresh=False
+watchdog: 5.80s, 10 snapshot requests, 1 command sends, revision 1→2, pot 20, stack A 190
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+create: upstream statuses [None, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+
+$ uv run --offline --locked python evidence/deepthi-day-3/decision-deadlines.py
+reset-on-reconnect: deadline=50, active_seconds=42
+production pause/resume: deadline=38, active_seconds=30
+callback-only model at t=35 before the callback: late_call=True pot=20
+production ingress at t=35 before the scheduler: late_call=False automatic=fold pot=0 revision=2
+
+$ node evidence/browser-interface/decisions.mjs
+Controlled engine-only filter:
+  paused: rendered active at lifecycle revision 2
+  active: rendered active at lifecycle revision 2
+Production revision pair:
+  paused: rendered paused at lifecycle revision 3
+  active: rendered active at lifecycle revision 4
+One callback at 12341 ms: callback counter 29000 ms; monotonic anchor 17659 ms

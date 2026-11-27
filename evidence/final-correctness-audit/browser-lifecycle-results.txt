@@ -22,3 +22,11 @@ pending history: reload (websocket), exact replay sent twice, one mutation and p
 $ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case suspension
 chromium 140.0.7339.16
 CDP freeze: countdown recovered 30s → 28s, no synthetic poker command, call applied once
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case pending-history --engine firefox
+firefox 141.0
+pending history: reload, exact replay sent twice, one mutation and pot 20
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case pending-history --engine webkit
+webkit 26.0
+pending history: reload, exact replay sent twice, one mutation and pot 20

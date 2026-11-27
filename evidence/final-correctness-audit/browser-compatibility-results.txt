@@ -1,0 +1,88 @@
+
+$ uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --browser chromium
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case reliability --engine chromium
+chromium 140.0.7339.16
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+chromium 140.0.7339.16
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+offline: navigator.onLine=False, fetch succeeded=False, browser events=1, synthetic event=False; actions suspended, peer paused, seat restored
+restart: both sessions invalidated; neither browser reserved a new seat
+replacement: displaced tab stopped; current seat folded
+
+$ uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --browser firefox
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case reliability --engine firefox
+firefox 141.0
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+firefox 141.0
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+watchdog: 4.51s, 8 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+offline: navigator.onLine=False, fetch succeeded=False, browser events=0, synthetic event=True; actions suspended, peer paused, seat restored
+restart: both sessions invalidated; neither browser reserved a new seat
+replacement: displaced tab stopped; current seat folded
+
+$ uv run --locked --group browser python evidence/browser-interface/browser_smoke.py --browser webkit
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case reliability --engine webkit
+webkit 26.0
+PASS showdown
+PASS tie
+PASS betting
+PASS engine-terminal
+PASS replacement
+PASS recovery
+PASS timeout
+PASS forfeit
+PASS both-absent
+PASS replay
+PASS stale
+PASS errors
+webkit 26.0
+create: upstream statuses [201, 201], original seat A, ready=False, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+join: upstream statuses [200, 200], original seat B, ready=True, refresh=True
+  both seats active in hand 1, pot 15, third join rejected; no credentials in monitored output
+watchdog: 4.51s, 7 snapshot requests, 2 command sends, revision 1→2, pot 20, stack A 190
+command snapshot loss: 2 sockets, 1 exact command sends, pot 20
+offline: navigator.onLine=False, fetch succeeded=False, browser events=1, synthetic event=False; actions suspended, peer paused, seat restored
+restart: both sessions invalidated; neither browser reserved a new seat
+replacement: displaced tab stopped; current seat folded
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case mixed --peer firefox
+chromium 140.0.7339.16
+firefox 141.0
+extended: five hands, four rotations, two refreshes, conserved total 400
+
+$ uv run --locked --group browser python evidence/final-correctness-audit/browser_audit.py --case mixed --peer webkit
+chromium 140.0.7339.16
+webkit 26.0
+extended: five hands, four rotations, two refreshes, conserved total 400

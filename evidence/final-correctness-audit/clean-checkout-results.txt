@@ -1,0 +1,21 @@
+Reproduce with bash evidence/final-correctness-audit/verify-package.sh 651a03c
+Recorded commands from the clean checkout and installed-wheel run
+HEAD is now at 651a03c Associate admission errors and verify browser restoration
+651a03cb7e23f688230d34603ac2f9663d6a93c3
+$ uv sync --locked --no-dev
+Runtime only, Python 3.13.9
+$ uv sync --locked --group browser
+$ uv run --locked --no-dev uvicorn poker.server:create_app --factory --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+{"status":"ok"}
+chromium 140.0.7339.16
+installed app: 7 assets, health, independent admission and sockets, fold 195/205, Ready → 185/200 + pot 15
+$ uv build --offline --wheel
+Wheel manifest: 7 frontend assets, no evidence, tests, environment or repository metadata
+$ uv sync --offline --locked --no-dev --no-install-project
+$ uv pip install --offline --no-deps --python <wheel venv>/bin/python <wheel>
+Installed package imported from site-packages outside the checkout
+$ <wheel venv>/bin/python -m uvicorn poker.server:create_app --factory --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
+{"status":"ok"}
+chromium 140.0.7339.16
+installed app: 7 assets, health, independent admission and sockets, fold 195/205, Ready → 185/200 + pot 15
+Clean checkout remained clean after verification.

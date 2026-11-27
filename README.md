@@ -14,7 +14,7 @@ The Day 1 commits reflect the earlier plan with Srishruthik on the engine and De
 
 The repository's first commit is `c29badee2f21e6542c67a176304460b14cea13b6` (README only, November 23, 2026). The first engine commit is `34aa241`. The branch histories record each partner's actual contributions.
 
-## Planned demo
+## Demonstration
 
 1. Create a room using the table rules agreed for the demo.
 2. Join it from a second browser using the room code.
@@ -178,6 +178,9 @@ uv sync --locked
 uv run --locked uvicorn poker.server:create_app --factory --host 127.0.0.1 --port 8000 --workers 1 --ws websockets-sansio --ws-max-size 4096
 ```
 
+Python 3.13 is selected by `.python-version`. For runtime-only installation,
+add `--no-dev` to both commands. Browser test dependencies are optional.
+
 1. Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/) in a browser.
 2. Choose a bet unit and select **Create room**. Copy the displayed room code.
 3. In a separate window or tab opened independently, enter the same URL and join with the code. An independent private window or another browser profile also works. A duplicated tab may inherit the original seat.
@@ -227,6 +230,12 @@ names, contrast, touch emulation, 200% root text and viewport widths of
 checks that both views conserve chips across Ready and refresh. Actual
 screen-reader use and physical mobile hardware remain unverified.
 [Browser verification matrix](evidence/browser-reliability/matrix.md)
+
+The final audit also exercised Chromium's native tab zoom and real
+cached history restoration. Firefox and WebKit returned by reloading
+in the tested configurations. See the audit for browser results, the
+tested wheel install, and the remaining manual checks.
+[Final audit and reproduction](evidence/final-correctness-audit/evidence-index.md)
 
 ### Wire-level fixture checks
 
@@ -284,6 +293,7 @@ curl -sS -H 'Content-Type: application/json' -d '{"room_code":"ROOM_CODE"}' http
 - [docs/protocol.md](docs/protocol.md) describes both current contracts and the gameplay decisions still open.
 - [Browser evidence and reproduction steps](evidence/browser-interface/notes.md) cover two-player gameplay, recovery, privacy, and frontend decisions.
 - [Browser reliability evidence](evidence/browser-reliability/notes.md) covers lost network responses, accessibility, and cross-browser verification.
+- [Final demonstration handoff](evidence/final-correctness-audit/presentation-handoff.md) records the tested two-player sequence and strongest engineering examples.
 - [Day 3 evidence and reproduction steps](evidence/deepthi-day-3/notes.md) cover timer boundaries, recovery, and the replay fix.
 - [Day 2 evidence and reproduction steps](evidence/deepthi-day-2/notes.md) cover gameplay, privacy, and coordination.
 - [Day 1 baseline](evidence/deepthi-day-1/baseline.txt) and [Day 1 results](evidence/deepthi-day-1/test-results.txt) preserve the original checks. The [integration notes](evidence/integration-day1-day3/notes.md) and [integration results](evidence/integration-day1-day3/test-results.txt) record the combined validation and joint decisions.

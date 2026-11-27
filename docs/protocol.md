@@ -368,6 +368,12 @@ attempts per failure sequence. Browser network and page events are
 hints. They never confer authority or reclaim an explicitly replaced
 seat. Invalid sessions stop retrying and require leaving the old session.
 
+On page hide the browser suspends its connection and disables local
+authority. A history reload uses tab storage. A cached return keeps
+its in-memory state and requests authority through a new authenticated
+connection before it can send gameplay commands. The app uses server
+disconnect reconciliation independently of browser navigation events.
+
 Turn and grace presentation use elapsed `performance.now()` time from
 the latest sampled snapshot. A paused turn retains its sampled amount.
 The browser requests a fresh snapshot on visibility return and never

@@ -1,0 +1,43 @@
+Fresh clean checkout at 651a03cb7e23f688230d34603ac2f9663d6a93c3
+$ uv sync --offline --locked
+$ uv run --offline --locked python -m unittest discover -s tests -v
+$ uv run --offline --locked python -W error -m unittest discover -s tests -v
+Ran 125 tests in 1.192s
+OK
+Ran 125 tests in 0.673s
+OK
+
+$ node --test tests/browser/client.test.mjs
+✔ revision pair rejects regression but accepts pause, resume, new hands and clock samples (1.819709ms)
+✔ decoder rejects malformed and unsafe frame shapes (2.635708ms)
+✔ command uses random identity and authoritative hand and engine revision (10.386417ms)
+✔ ack and snapshot can arrive in either order without releasing stale actions (1.300916ms)
+✔ signals authority only for server-offered moves, and labels exact fixed amounts (0.334042ms)
+✔ session storage retains only seat metadata and exact unresolved payload (2.130542ms)
+✔ admission persistence recovers the exact operation and replaces it with seat identity (4.130625ms)
+✔ monotonic sampling handles delays, pause, resume, and zero clamp (0.170125ms)
+✔ socket authority, stale generation, bounded reconnect and replacement (2.983833ms)
+✔ command recovery has one fixed monotonic deadline per transmission (2.056917ms)
+✔ heartbeat and browser hints relinquish stale authority without reviving replaced seats (0.963875ms)
+✔ automatic reconnect stops after eleven schedules and explicit exit cancels retries (0.442334ms)
+✔ default scheduling preserves the browser global receiver (0.383125ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 237.542917
+
+$ uv lock --check --offline
+
+$ uvx --offline ruff==0.15.20 check .
+
+$ uvx --offline ruff==0.15.20 format --check .
+
+$ git diff --check
+Resolved 24 packages in 5ms
+Resolved 24 packages in 3ms
+All checks passed!
+46 files already formatted
