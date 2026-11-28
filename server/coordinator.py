@@ -65,6 +65,7 @@ class GameCoordinator:
         self._grace_duration = grace_duration
         self._timing = Timing()
         self._changed = asyncio.Event()
+        self._retired = asyncio.Event()
         self._accepted: dict[
             tuple[Player, int], dict[str, tuple[Command, Acknowledgment]]
         ] = {}
@@ -88,11 +89,12 @@ class GameCoordinator:
 
     def attach(self, token: str, connection: Connection) -> Player | None:
         with self._rooms.synchronized():
-            now = self._clock.now_ns()
-            self._reconcile(now)
             view = self._rooms.authenticate(token)
             if view is None:
                 return None
+            now = self._clock.now_ns()
+            self._reconcile(now)
+            connection.generation = self._rooms.generation
             self._connections.attach(view.seat, connection)
             room = self._rooms.snapshot()
             assert room is not None
@@ -104,6 +106,11 @@ class GameCoordinator:
 
     def detach(self, seat: Player, connection: Connection) -> None:
         with self._rooms.synchronized():
+            if (
+                connection.generation != self._rooms.generation
+                or not self._connections.owns(seat, connection)
+            ):
+                return
             now = self._clock.now_ns()
             self._reconcile(now)
             if self._connections.detach_if_current(seat, connection):
@@ -116,6 +123,8 @@ class GameCoordinator:
         self, seat: Player, connection: Connection, payload: dict[str, object]
     ) -> None:
         with self._rooms.synchronized():
+            if not self._is_current(seat, connection):
+                return
             now = self._clock.now_ns()
             self._reconcile(now)
             if self._connections.is_current(seat, connection):
@@ -124,6 +133,8 @@ class GameCoordinator:
 
     def snapshot(self, seat: Player, connection: Connection) -> None:
         with self._rooms.synchronized():
+            if not self._is_current(seat, connection):
+                return
             now = self._clock.now_ns()
             self._reconcile(now)
             if self._connections.is_current(seat, connection):
@@ -131,6 +142,67 @@ class GameCoordinator:
                 assert room is not None
                 connection.offer(self._view(room, seat, now))
             self._sync_presence(now)
+
+    def _is_current(self, seat: Player, connection: Connection) -> bool:
+        return (
+            connection.generation == self._rooms.generation
+            and self._connections.is_current(seat, connection)
+        )
+
+    def legacy_status(
+        self, token: str
+    ) -> tuple[dict[str, object], asyncio.Event] | None:
+        with self._rooms.synchronized():
+            view = self._rooms.authenticate(token)
+            if view is None:
+                return None
+            return (
+                {
+                    "type": "room_status",
+                    "seat": view.seat,
+                    "bet_unit": view.bet_unit,
+                    "status": view.status,
+                },
+                self._retired,
+            )
+
+    def is_retired_token(self, token: str) -> bool:
+        return self._rooms.is_retired_token(token)
+
+    def terminal_command(
+        self, seat: Player, connection: Connection, *, release: bool
+    ) -> None:
+        with self._rooms.synchronized():
+            if not connection.gameplay or not self._is_current(seat, connection):
+                return
+            now = self._clock.now_ns()
+            self._reconcile(now)
+            if not self._is_current(seat, connection):
+                self._sync_presence(now)
+                return
+            room = self._rooms.snapshot()
+            assert room is not None
+            if self._timing.result is None:
+                connection.offer({"type": "error", "code": "ROOM_NOT_TERMINAL"})
+                self._sync_presence(now)
+            elif not release:
+                changed = self._timing.acknowledge(seat)
+                if changed is self._timing:
+                    connection.offer(self._view(room, seat, now))
+                else:
+                    self._set_timing(changed)
+                    self._publish_game(room, now)
+            elif not self._timing.can_release(now):
+                connection.offer({"type": "error", "code": "RELEASE_NOT_ELIGIBLE"})
+                connection.offer(self._view(room, seat, now))
+            else:
+                self._rooms.retire(room)
+                self._connections.retire()
+                self._retired.set()
+                self._retired = asyncio.Event()
+                self._accepted.clear()
+                self._rejected.clear()
+                self._set_timing(Timing())
 
     def _view(self, room: Room, seat: Player, now: int) -> dict[str, object]:
         return player_view(room, seat, room.revision, self._timing, now)
@@ -176,7 +248,7 @@ class GameCoordinator:
             return
         result = self._timing.disconnect_result(now)
         if result is not None:
-            self._set_timing(self._timing.finish(result))
+            self._set_timing(self._timing.finish(result, now))
             self._publish_game(room, now)
             return
         deadline = self._timing.turn_deadline
@@ -207,19 +279,23 @@ class GameCoordinator:
         logger.error(
             "Engine rejected its automatic action at revision %d", room.revision
         )
-        self._set_timing(self._timing.finish(MatchResult("engine_error", None)))
+        self._set_timing(self._timing.finish(MatchResult("engine_error", None), now))
         self._publish_game(room, now)
 
-    def tick(self) -> None:
+    def tick(self, generation: int | None = None) -> None:
         with self._rooms.synchronized():
+            if generation is not None and generation != self._rooms.generation:
+                return
             now = self._clock.now_ns()
             self._reconcile(now)
             self._sync_presence(now)
 
     async def run_scheduler(self) -> None:
+        generation = None
         while True:
             with self._rooms.synchronized():
-                self.tick()
+                self.tick(generation)
+                generation = self._rooms.generation
                 deadline = self._timing.next_deadline
                 self._changed.clear()
             # A wakeup never owns an old turn; it rereads the current deadline.
@@ -227,6 +303,8 @@ class GameCoordinator:
 
     def submit(self, seat: Player, connection: Connection, command: Command) -> None:
         with self._rooms.synchronized():
+            if not self._is_current(seat, connection) or not connection.gameplay:
+                return
             now = self._clock.now_ns()
             self._reconcile(now)
             self._sync_presence(now)

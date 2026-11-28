@@ -10,6 +10,7 @@ from .clock import SECOND
 SEATS: tuple[Player, Player] = ("A", "B")
 TURN_DURATION = 30 * SECOND
 DISCONNECT_GRACE = 20 * SECOND
+TERMINAL_RETENTION = 60 * SECOND
 Presence = tuple[bool, bool]
 DeadlinePair = tuple[int | None, int | None]
 
@@ -37,6 +38,8 @@ class Timing:
     grace: DeadlinePair = (None, None)
     result: MatchResult | None = None
     last_automatic_action: AutomaticAction | None = None
+    terminal_at: int | None = None
+    acknowledged: frozenset[Player] = frozenset()
 
     @property
     def next_deadline(self) -> int | None:
@@ -91,7 +94,7 @@ class Timing:
             last = None
         changed = replace(self, last_automatic_action=last)
         if hand.match_winner is not None:
-            return changed.finish(MatchResult("engine", hand.match_winner))
+            return changed.finish(MatchResult("engine", hand.match_winner), now)
         deadline = (
             now + turn_duration
             if self.activated and all(self.presence) and hand.actor
@@ -99,7 +102,7 @@ class Timing:
         )
         return replace(changed, turn_deadline=deadline, saved_turn=None)
 
-    def finish(self, result: MatchResult) -> "Timing":
+    def finish(self, result: MatchResult, now: int) -> "Timing":
         return replace(
             self,
             result=result,
@@ -107,6 +110,23 @@ class Timing:
             saved_turn=None,
             grace=(None, None),
             revision=self.revision + 1,
+            terminal_at=now,
+        )
+
+    def acknowledge(self, seat: Player) -> "Timing":
+        if seat in self.acknowledged:
+            return self
+        return replace(
+            self, acknowledged=self.acknowledged | {seat}, revision=self.revision + 1
+        )
+
+    def retention_remaining(self, now: int) -> int:
+        assert self.terminal_at is not None
+        return max(0, self.terminal_at + TERMINAL_RETENTION - now)
+
+    def can_release(self, now: int) -> bool:
+        return len(self.acknowledged) == 2 or (
+            bool(self.acknowledged) and self.retention_remaining(now) == 0
         )
 
     def disconnect_result(self, now: int) -> MatchResult | None:

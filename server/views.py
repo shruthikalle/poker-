@@ -19,6 +19,14 @@ def player_view(
     }
     if timing is not None:
         view.update(timing_view(room, timing, now))
+        if timing.terminal_at is not None:
+            view["room_release"] = {
+                "acknowledged": {
+                    player: player in timing.acknowledged for player in SEATS
+                },
+                "eligible": timing.can_release(now),
+                "remaining_ms": _milliseconds(timing.retention_remaining(now)),
+            }
     if hand is None:
         return view
 

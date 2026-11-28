@@ -18,7 +18,6 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,7 +26,7 @@ from starlette.requests import HTTPConnection
 
 from server.clock import Clock
 from server.commands import COMMAND_SCHEMA
-from server.connections import Connection
+from server.connections import ROOM_RETIRED_CLOSE, Connection
 from server.coordinator import GameCoordinator
 from server.timers import DISCONNECT_GRACE, TURN_DURATION
 from server.sessions import SessionError, SessionStore
@@ -142,12 +141,40 @@ async def _send_error(socket: WebSocket, code: str, message: str) -> None:
     await socket.send_json({"type": "error", "code": code, "message": message})
 
 
+async def _legacy_room_socket(
+    socket: WebSocket, token: str, coordinator: GameCoordinator
+) -> None:
+    status = coordinator.legacy_status(token)
+    if status is None:
+        await socket.close(code=1008)
+        return
+    frame, retired = status
+    async with create_task_group() as tasks:
+
+        async def watch_retirement() -> None:
+            await retired.wait()
+            tasks.cancel_scope.cancel()
+
+        tasks.start_soon(watch_retirement)
+        try:
+            await socket.send_json(frame)
+            await _receive_message(socket)
+        except WebSocketDisconnect:
+            return
+        finally:
+            tasks.cancel_scope.cancel()
+    await socket.close(code=ROOM_RETIRED_CLOSE if retired.is_set() else 1008)
+
+
 async def _lobby_socket(
     socket: WebSocket, token: str, coordinator: GameCoordinator, gameplay: bool
 ) -> None:
     connection = Connection(socket, gameplay)
     seat = coordinator.attach(token, connection)
     if seat is None:
+        if gameplay and coordinator.is_retired_token(token):
+            await socket.close(code=ROOM_RETIRED_CLOSE)
+            return
         await _send_error(socket, "UNAUTHORIZED", "Invalid session token")
         await socket.close(code=1008)
         return
@@ -159,6 +186,13 @@ async def _lobby_socket(
                 coordinator.reply(seat, connection, {"type": "pong"})
             elif gameplay and message == {"type": "snapshot_request"}:
                 coordinator.snapshot(seat, connection)
+            elif gameplay and message in (
+                {"type": "acknowledge_result"},
+                {"type": "release_room"},
+            ):
+                coordinator.terminal_command(
+                    seat, connection, release=message["type"] == "release_room"
+                )
             elif gameplay:
                 try:
                     command = COMMAND_SCHEMA.validate_python(message)
@@ -372,22 +406,9 @@ def create_app(
                 except ValidationError:
                     await socket.close(code=1008)
                     return
-                room = await run_in_threadpool(
-                    manager.authenticate, authenticate.session_token
+                await _legacy_room_socket(
+                    socket, authenticate.session_token, coordinator
                 )
-                if room is None:
-                    await socket.close(code=1008)
-                    return
-                await socket.send_json(
-                    {
-                        "type": "room_status",
-                        "seat": room.seat,
-                        "bet_unit": room.bet_unit,
-                        "status": room.status,
-                    }
-                )
-                await _receive_message(socket)
-                await socket.close(code=1008)
             elif (
                 kind == "auth"
                 and (

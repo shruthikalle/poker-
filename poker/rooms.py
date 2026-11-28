@@ -1,10 +1,13 @@
 """In-memory room admission independent of the network transport."""
 
+from base64 import urlsafe_b64decode, urlsafe_b64encode
+from binascii import Error as Base64Error
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from hashlib import sha256
-from secrets import compare_digest, token_urlsafe
+from hmac import digest
+from secrets import compare_digest, token_bytes, token_urlsafe
 from threading import RLock
 from typing import Literal
 
@@ -57,6 +60,7 @@ class Room:
     seat_b_token: str | None = field(default=None, repr=False)
     hand: GameState | None = field(default=None, repr=False)
     revision: int = 0
+    generation: int = 0
 
     @property
     def status(self) -> RoomStatus:
@@ -77,7 +81,9 @@ class RoomManager:
         if ruleset not in ("legacy", "pdf"):
             raise ValueError("unknown ruleset")
         self._code_factory = code_factory or (lambda: token_urlsafe(9))
-        self._token_factory = token_factory or (lambda: token_urlsafe(32))
+        self._token_factory = token_factory
+        self._secret = token_bytes(32)
+        self._generation = 0
         self._deck = deck
         self._ruleset = ruleset
         self._lock = RLock()
@@ -87,6 +93,40 @@ class RoomManager:
     @property
     def ruleset(self) -> Ruleset:
         return self._ruleset
+
+    @property
+    def generation(self) -> int:
+        with self._lock:
+            return self._generation
+
+    def _tag(self, purpose: str, value: str) -> str:
+        return digest(self._secret, f"{purpose}:{value}".encode(), "sha256").hex()[:32]
+
+    def _new_token(self) -> str:
+        if self._token_factory:
+            provided = self._token_factory()
+            if self._generation == 0:
+                return provided
+            nonce = sha256(provided.encode()).digest()[:16]
+        else:
+            nonce = token_bytes(16)
+        payload = self._generation.to_bytes(4, "big") + nonce
+        token = payload + digest(self._secret, b"seat:" + payload, "sha256")[:12]
+        return urlsafe_b64encode(token).decode().rstrip("=")
+
+    def is_retired_token(self, token: str) -> bool:
+        if self.generation == 0 or len(token) != 43 or not token.isascii():
+            return False
+        try:
+            raw = urlsafe_b64decode(token + "=")
+        except Base64Error:
+            return False
+        if len(raw) != 32 or urlsafe_b64encode(raw).decode().rstrip("=") != token:
+            return False
+        payload, signature = raw[:20], raw[20:]
+        return int.from_bytes(payload[:4], "big") < self.generation and compare_digest(
+            signature, digest(self._secret, b"seat:" + payload, "sha256")[:12]
+        )
 
     def admit_once(
         self,
@@ -120,7 +160,10 @@ class RoomManager:
             if self._room is not None:
                 raise RoomAlreadyExists("an active room already exists")
 
-            room = Room(self._code_factory(), bet_unit, self._token_factory())
+            code = self._code_factory()
+            if self._generation:
+                code = f"{code}_{self._tag('code', str(self._generation))}"
+            room = Room(code, bet_unit, self._new_token(), generation=self._generation)
             self._room = room
             return Admission(room.code, "A", room.seat_a_token, bet_unit, room.status)
 
@@ -138,7 +181,7 @@ class RoomManager:
                 raise RoomFull("room is full")
 
             for _ in range(8):
-                token = self._token_factory()
+                token = self._new_token()
                 if token != room.seat_a_token:
                     break
             else:
@@ -184,6 +227,15 @@ class RoomManager:
             if hand != current.hand:
                 self._room = replace(current, hand=hand, revision=current.revision + 1)
             return self._room
+
+    def retire(self, current: Room) -> None:
+        """Discard room and admission authority inside the owning transaction."""
+        with self._lock:
+            if current is not self._room:
+                raise RuntimeError("room retirement requires the current room")
+            self._room = None
+            self._admissions.clear()
+            self._generation += 1
 
     def snapshot(self) -> Room | None:
         """Return the immutable server-side state for inspection."""

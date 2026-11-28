@@ -10,6 +10,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from .sessions import Seat
 
 QUEUE_CAPACITY = 32
+ROOM_RETIRED_CLOSE = 4001
 
 
 @dataclass(eq=False)
@@ -21,6 +22,7 @@ class Connection:
     )
     closing: asyncio.Event = field(default_factory=asyncio.Event)
     close_code: int = 1000
+    generation: int | None = None
 
     def request_close(self, code: int) -> None:
         if not self.closing.is_set():
@@ -37,7 +39,10 @@ class Connection:
 
     async def _write(self) -> None:
         while True:
-            await self.websocket.send_json(await self.queue.get())
+            frame = await self.queue.get()
+            if self.closing.is_set():
+                return
+            await self.websocket.send_json(frame)
 
     async def run(self, read: Callable[[], Awaitable[None]]) -> None:
         async with create_task_group() as group:
@@ -77,13 +82,21 @@ class ConnectionRegistry:
             previous.request_close(4000)
 
     def is_current(self, seat: Seat, connection: Connection) -> bool:
-        return self._current.get(seat) is connection and not connection.closing.is_set()
+        return self.owns(seat, connection) and not connection.closing.is_set()
+
+    def owns(self, seat: Seat, connection: Connection) -> bool:
+        return self._current.get(seat) is connection
 
     def detach_if_current(self, seat: Seat, connection: Connection) -> bool:
-        if self._current.get(seat) is not connection:
+        if not self.owns(seat, connection):
             return False
         del self._current[seat]
         return True
+
+    def retire(self) -> None:
+        for connection in self._current.values():
+            connection.request_close(ROOM_RETIRED_CLOSE)
+        self._current.clear()
 
     def active(self) -> tuple[tuple[Seat, Connection], ...]:
         return tuple(
