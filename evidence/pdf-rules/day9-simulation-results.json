@@ -1,0 +1,44 @@
+{
+  "ruleset": "pdf",
+  "runs": [
+    {
+      "seed": 11,
+      "hands": 250,
+      "actions": 1930,
+      "showdowns": 56,
+      "folds": 194,
+      "completed_matches": 3
+    },
+    {
+      "seed": 29,
+      "hands": 250,
+      "actions": 2032,
+      "showdowns": 71,
+      "folds": 179,
+      "completed_matches": 0
+    },
+    {
+      "seed": 47,
+      "hands": 250,
+      "actions": 1960,
+      "showdowns": 61,
+      "folds": 189,
+      "completed_matches": 3
+    },
+    {
+      "seed": 83,
+      "hands": 250,
+      "actions": 2029,
+      "showdowns": 61,
+      "folds": 189,
+      "completed_matches": 2
+    }
+  ],
+  "totals": {
+    "hands": 1000,
+    "actions": 7951,
+    "showdowns": 249,
+    "folds": 751,
+    "completed_matches": 8
+  }
+}
