@@ -16,6 +16,7 @@ from poker.rooms import (
 class RoomCreationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.rooms = RoomManager(
+            ruleset="legacy",
             code_factory=lambda: "test-room-code",
             token_factory=lambda: "test-session-a",
         )
@@ -23,7 +24,7 @@ class RoomCreationTests(unittest.TestCase):
     def test_accepts_every_even_bet_unit_inclusive(self) -> None:
         for bet_unit in (2, 4, 6, 8, 10, 12, 14, 16, 18, 20):
             with self.subTest(bet_unit=bet_unit):
-                rooms = RoomManager()
+                rooms = RoomManager(ruleset="legacy")
                 admission = rooms.create(bet_unit)
                 self.assertEqual(admission.bet_unit, bet_unit)
 
@@ -62,7 +63,7 @@ class RoomCreationTests(unittest.TestCase):
             room.bet_unit = 12
 
     def test_default_generators_produce_url_safe_credentials(self) -> None:
-        admission = RoomManager().create(10)
+        admission = RoomManager(ruleset="legacy").create(10)
         self.assertRegex(admission.room_code, r"^[A-Za-z0-9_-]{12}$")
         self.assertRegex(admission.session_token, r"^[A-Za-z0-9_-]{43}$")
 
@@ -80,6 +81,7 @@ class RoomJoiningTests(unittest.TestCase):
     def setUp(self) -> None:
         tokens = iter(("test-session-a", "test-session-b"))
         self.rooms = RoomManager(
+            ruleset="legacy",
             code_factory=lambda: "test-room-code",
             token_factory=tokens.__next__,
         )
@@ -137,7 +139,7 @@ class RoomJoiningTests(unittest.TestCase):
 
     def test_join_retries_a_duplicate_token(self) -> None:
         tokens = iter(("test-session-a", "test-session-a", "test-session-b"))
-        rooms = RoomManager(token_factory=tokens.__next__)
+        rooms = RoomManager(ruleset="legacy", token_factory=tokens.__next__)
         host = rooms.create(10)
 
         guest = rooms.join(host.room_code)
@@ -146,7 +148,7 @@ class RoomJoiningTests(unittest.TestCase):
         self.assertEqual(rooms.snapshot().seat_a_token, "test-session-a")
 
     def test_repeated_token_collision_leaves_room_waiting(self) -> None:
-        rooms = RoomManager(token_factory=lambda: "test-session-a")
+        rooms = RoomManager(ruleset="legacy", token_factory=lambda: "test-session-a")
         host = rooms.create(10)
         waiting = rooms.snapshot()
 

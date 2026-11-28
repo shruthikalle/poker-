@@ -12,7 +12,9 @@ def create_app(
     code_factory: Callable[[], str] | None = None,
     token_factory: Callable[[], str] | None = None,
 ) -> FastAPI:
-    rooms = RoomManager(code_factory=code_factory, token_factory=token_factory)
+    rooms = RoomManager(
+        code_factory=code_factory, token_factory=token_factory, ruleset="legacy"
+    )
     return create_combined_app(rooms, lobby_errors=True)
 
 

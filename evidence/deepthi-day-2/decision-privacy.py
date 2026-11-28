@@ -23,6 +23,7 @@ def privacy_check(payload, opponent, unopened, internal, private):
 def main():
     tokens = iter(("test-token-a", "test-token-b"))
     rooms = RoomManager(
+        ruleset="legacy",
         code_factory=lambda: "test-code",
         token_factory=tokens.__next__,
         deck=fixed_deck("showdown"),

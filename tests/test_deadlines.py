@@ -19,7 +19,7 @@ class Game:
         tokens = iter(("timed-a", "timed-b"))
         self.clock = ManualClock()
         self.rooms = RoomManager(
-            token_factory=tokens.__next__, deck=fixed_deck("showdown")
+            ruleset="legacy", token_factory=tokens.__next__, deck=fixed_deck("showdown")
         )
         self.coordinator = GameCoordinator(
             self.rooms, clock=self.clock, replay_capacity=4

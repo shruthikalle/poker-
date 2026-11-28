@@ -1,6 +1,6 @@
-# Implemented poker rules
+# Historical legacy rules
 
-This document describes current behavior. The alternative rules in [the draft](rules.md) and interrupted-pot policy remain pending joint approval.
+This document describes the earlier configurable variant retained for historical tests and evidence. The normal application uses the [PDF rules](rules.md). The interrupted-pot transport policy remains a separate review item.
 
 Two players share one active room per process. The host chooses an even
 integer bet unit between 2 and 20 inclusive. Each starts with 20 times that

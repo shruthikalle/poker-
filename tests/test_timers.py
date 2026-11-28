@@ -7,7 +7,7 @@ from server.timers import DISCONNECT_GRACE, TURN_DURATION, MatchResult, Timing
 
 class TimingStateTests(unittest.TestCase):
     def setUp(self):
-        self.hand = new_game()
+        self.hand = new_game(ruleset="legacy")
 
     def presence(self, state, seats, seconds):
         return state.with_presence(

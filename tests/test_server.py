@@ -20,7 +20,9 @@ class RoomHTTPTests(unittest.TestCase):
     def setUp(self) -> None:
         tokens = iter(("test-session-a", "test-session-b"))
         self.rooms = RoomManager(
-            code_factory=lambda: "test-room-code", token_factory=tokens.__next__
+            ruleset="legacy",
+            code_factory=lambda: "test-room-code",
+            token_factory=tokens.__next__,
         )
         self.client = self.enterContext(TestClient(create_app(self.rooms)))
 
@@ -124,8 +126,8 @@ class RoomHTTPTests(unittest.TestCase):
 
     def test_application_instances_have_independent_room_state(self) -> None:
         with (
-            TestClient(create_app()) as first_client,
-            TestClient(create_app()) as second_client,
+            TestClient(create_app(RoomManager(ruleset="legacy"))) as first_client,
+            TestClient(create_app(RoomManager(ruleset="legacy"))) as second_client,
         ):
             first = first_client.post("/api/rooms", json={"bet_unit": 2})
             self.assertEqual(first.status_code, 201)
@@ -142,7 +144,9 @@ class RoomWebSocketTests(unittest.TestCase):
     def setUp(self) -> None:
         tokens = iter(("test-session-a", "test-session-b"))
         self.rooms = RoomManager(
-            code_factory=lambda: "test-room-code", token_factory=tokens.__next__
+            ruleset="legacy",
+            code_factory=lambda: "test-room-code",
+            token_factory=tokens.__next__,
         )
         self.client = self.enterContext(TestClient(create_app(self.rooms)))
         self.host = self.rooms.create(10)

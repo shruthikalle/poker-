@@ -20,6 +20,7 @@ class AdmissionRaceTests(unittest.TestCase):
     def test_distinct_keys_and_legacy_join_share_capacity(self):
         tokens = iter(("audit-host", "audit-guest"))
         rooms = RoomManager(
+            ruleset="legacy",
             code_factory=lambda: "AUDITROOM",
             token_factory=tokens.__next__,
             deck=fixed_deck("showdown"),
@@ -81,7 +82,9 @@ class AdmissionRaceTests(unittest.TestCase):
 
     def test_replay_and_conflicting_reuse_race_with_first_socket(self):
         rooms = RoomManager(
-            code_factory=lambda: "AUDITROOM", deck=fixed_deck("showdown")
+            ruleset="legacy",
+            code_factory=lambda: "AUDITROOM",
+            deck=fixed_deck("showdown"),
         )
         with TestClient(create_app(rooms)) as client:
             headers = {"Admission-Key": "a" * 64}
@@ -147,7 +150,7 @@ class LifespanAuditTests(unittest.TestCase):
         for lifecycle in ("waiting", "active", "paused", "complete"):
             with self.subTest(lifecycle=lifecycle):
                 clock = ObservedClock()
-                rooms = RoomManager(deck=fixed_deck("showdown"))
+                rooms = RoomManager(ruleset="legacy", deck=fixed_deck("showdown"))
                 durations = {"grace_duration": 1} if lifecycle == "complete" else {}
                 with TestClient(create_app(rooms, clock=clock, **durations)) as client:
                     host = client.post("/api/rooms", json={"bet_unit": 10}).json()

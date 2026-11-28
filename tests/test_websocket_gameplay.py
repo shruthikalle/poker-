@@ -44,6 +44,7 @@ class GameplaySocketTests(unittest.TestCase):
         self.deck = deck
         tokens = iter(("test-session-a", "test-session-b"))
         self.rooms = RoomManager(
+            ruleset="legacy",
             code_factory=lambda: "test-game-room",
             token_factory=tokens.__next__,
             deck=deck,
@@ -448,7 +449,7 @@ class GameplaySocketTests(unittest.TestCase):
 
     def test_gameplay_revision_is_isolated_between_app_instances(self):
         with self.game("fold"):
-            with TestClient(create_app()) as other:
+            with TestClient(create_app(RoomManager(ruleset="legacy"))) as other:
                 response = other.post("/api/rooms", json={"bet_unit": 12})
                 self.assertEqual(response.status_code, 201)
                 with other.websocket_connect("/ws") as host:

@@ -57,7 +57,7 @@ class CommandSchemaTests(unittest.TestCase):
                     COMMAND_SCHEMA.validate_python(payload)
 
     def test_room_owns_revision_and_unchanged_commit_is_a_noop(self):
-        rooms = RoomManager(deck=fixed_deck("showdown"))
+        rooms = RoomManager(ruleset="legacy", deck=fixed_deck("showdown"))
         host = rooms.create(10)
         self.assertEqual(rooms.snapshot().revision, 0)
         rooms.join(host.room_code)

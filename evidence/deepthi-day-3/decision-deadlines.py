@@ -11,7 +11,9 @@ from server.fixtures import ManualClock, fixed_deck
 
 def setup():
     tokens = iter(("fixture-a", "fixture-b"))
-    rooms = RoomManager(token_factory=tokens.__next__, deck=fixed_deck("showdown"))
+    rooms = RoomManager(
+        ruleset="legacy", token_factory=tokens.__next__, deck=fixed_deck("showdown")
+    )
     clock = ManualClock()
     game = GameCoordinator(rooms, clock=clock)
     game.admit(rooms.join, rooms.create(10).room_code)

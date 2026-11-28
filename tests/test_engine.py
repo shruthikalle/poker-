@@ -8,7 +8,8 @@ from poker import apply_action, legal_actions, new_game
 class FirstHandTests(unittest.TestCase):
     def setUp(self) -> None:
         self.state = new_game(
-            deck=tuple(f"{rank}{suit}" for rank in "23456789TJQKA" for suit in "cdhs")
+            ruleset="legacy",
+            deck=tuple(f"{rank}{suit}" for rank in "23456789TJQKA" for suit in "cdhs"),
         )
 
     def test_g1_initial_legal_actions_and_blinds(self) -> None:

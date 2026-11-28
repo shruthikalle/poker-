@@ -8,7 +8,7 @@ from secrets import compare_digest, token_urlsafe
 from threading import RLock
 from typing import Literal
 
-from .engine import GameState, Player, new_game
+from .engine import GameState, Player, Ruleset, new_game
 
 RoomStatus = Literal["waiting", "ready"]
 
@@ -72,13 +72,21 @@ class RoomManager:
         code_factory: Callable[[], str] | None = None,
         token_factory: Callable[[], str] | None = None,
         deck: tuple[str, ...] | None = None,
+        ruleset: Ruleset = "pdf",
     ) -> None:
+        if ruleset not in ("legacy", "pdf"):
+            raise ValueError("unknown ruleset")
         self._code_factory = code_factory or (lambda: token_urlsafe(9))
         self._token_factory = token_factory or (lambda: token_urlsafe(32))
         self._deck = deck
+        self._ruleset = ruleset
         self._lock = RLock()
         self._room: Room | None = None
         self._admissions: list[tuple[bytes, tuple[str, int | str], Admission]] = []
+
+    @property
+    def ruleset(self) -> Ruleset:
+        return self._ruleset
 
     def admit_once(
         self,
@@ -103,6 +111,8 @@ class RoomManager:
             return admission
 
     def create(self, bet_unit: object) -> Admission:
+        if self._ruleset == "pdf" and bet_unit != 10:
+            raise InvalidBetUnit("PDF rules require a fixed 10-chip big blind")
         if type(bet_unit) is not int or not 2 <= bet_unit <= 20 or bet_unit % 2:
             raise InvalidBetUnit("bet unit must be an even integer from 2 to 20")
 
@@ -137,7 +147,9 @@ class RoomManager:
             joined = replace(
                 room,
                 seat_b_token=token,
-                hand=new_game(bet_unit=room.bet_unit, deck=self._deck),
+                hand=new_game(
+                    bet_unit=room.bet_unit, deck=self._deck, ruleset=self._ruleset
+                ),
                 revision=1,
             )
             self._room = joined

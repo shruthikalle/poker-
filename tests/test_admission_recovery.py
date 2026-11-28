@@ -12,7 +12,9 @@ class AdmissionRecoveryTests(unittest.TestCase):
     def setUp(self):
         tokens = iter(("fixture-seat-a", "fixture-seat-b"))
         self.rooms = RoomManager(
-            code_factory=lambda: "TESTROOM", token_factory=lambda: next(tokens)
+            ruleset="legacy",
+            code_factory=lambda: "TESTROOM",
+            token_factory=lambda: next(tokens),
         )
         self.client = self.enterContext(TestClient(create_app(self.rooms)))
 

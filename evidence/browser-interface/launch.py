@@ -5,12 +5,14 @@ from dataclasses import replace
 from poker.rooms import RoomManager
 from poker.server import create_app
 from server.clock import SECOND
-from server.fixtures import fixed_deck
+from server.fixtures import fixed_deck, fixed_pdf_deck
 
 
 def fixture(scenario, *, turn=30 * SECOND, grace=3 * SECOND):
     return create_app(
-        RoomManager(code_factory=lambda: "FRIEND42", deck=fixed_deck(scenario)),
+        RoomManager(
+            code_factory=lambda: "FRIEND42", deck=fixed_deck(scenario), ruleset="legacy"
+        ),
         turn_duration=turn,
         grace_duration=grace,
     )
@@ -22,6 +24,14 @@ def showdown():
 
 def tie():
     return fixture("tie")
+
+
+def pdf():
+    return create_app(
+        RoomManager(
+            code_factory=lambda: "PDFROOM", deck=fixed_pdf_deck(), ruleset="pdf"
+        )
+    )
 
 
 def timeout():
@@ -46,5 +56,9 @@ class ShortStackRoom(RoomManager):
 
 def short_stack():
     return create_app(
-        ShortStackRoom(code_factory=lambda: "FRIEND42", deck=fixed_deck("showdown"))
+        ShortStackRoom(
+            code_factory=lambda: "FRIEND42",
+            deck=fixed_deck("showdown"),
+            ruleset="legacy",
+        )
     )

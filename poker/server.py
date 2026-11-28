@@ -204,7 +204,7 @@ def create_app(
     turn_duration: int = TURN_DURATION,
     grace_duration: int = DISCONNECT_GRACE,
 ) -> FastAPI:
-    manager = RoomManager() if rooms is None else rooms
+    manager = RoomManager(ruleset="pdf") if rooms is None else rooms
     sessions = SessionStore(manager=manager)
     coordinator = GameCoordinator(
         manager,
@@ -247,6 +247,17 @@ def create_app(
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/api/config")
+    def table_config() -> dict[str, object]:
+        return {
+            "ruleset": manager.ruleset,
+            "bet_unit": 10 if manager.ruleset == "pdf" else None,
+            "starting_stack": 500 if manager.ruleset == "pdf" else None,
+            "small_blind": 5 if manager.ruleset == "pdf" else None,
+            "big_blind": 10 if manager.ruleset == "pdf" else None,
+            "turn_river_increment": 20 if manager.ruleset == "pdf" else None,
+        }
 
     @app.post(
         "/api/rooms",

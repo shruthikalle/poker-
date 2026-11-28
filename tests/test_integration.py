@@ -12,7 +12,9 @@ class CombinedAdmissionTests(unittest.TestCase):
     def setUp(self) -> None:
         tokens = iter(("test-token-a", "test-token-b"))
         self.rooms = RoomManager(
-            code_factory=lambda: "test-room", token_factory=tokens.__next__
+            ruleset="legacy",
+            code_factory=lambda: "test-room",
+            token_factory=tokens.__next__,
         )
         self.client = self.enterContext(TestClient(create_app(self.rooms)))
 

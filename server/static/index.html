@@ -23,7 +23,7 @@
         <p class="eyebrow">PRIVATE TABLE · TWO PLAYERS</p>
         <h1 id="title" tabindex="-1">Heads-Up<br>Live Poker</h1>
         <p class="lede">Play a private game of fixed-limit Texas Hold’em with a friend. Share a room code to get started.</p>
-        <details class="rules"><summary>Table rules</summary><p>Play with virtual chips. The host chooses a fixed bet unit, and each player starts with 20 units. The small blind is half a unit, and the big blind is one unit. Each street allows two raises after the opener. There are no all-ins or side pots.</p></details>
+        <details class="rules"><summary>Table rules</summary><p id="rules-summary">Play with virtual chips. The host chooses a fixed bet unit, and each player starts with 20 units. The small blind is half a unit, and the big blind is one unit. Each street allows two raises after the opener. There are no all-ins or side pots.</p></details>
       </div>
       <section id="admission-recovery" class="panel" aria-labelledby="recovery-title" hidden>
         <h2 id="recovery-title">Confirm room admission</h2>
@@ -33,7 +33,7 @@
       <div id="admission-forms" class="admission">
         <form id="create-form" class="panel">
           <h2>Create a room</h2>
-          <label for="bet-unit">Bet unit</label>
+          <label id="bet-unit-label" for="bet-unit">Bet unit</label>
           <select id="bet-unit" name="bet_unit">
             <option>2</option><option>4</option><option>6</option><option>8</option><option selected>10</option>
             <option>12</option><option>14</option><option>16</option><option>18</option><option>20</option>

@@ -8,14 +8,14 @@ from server.fixtures import fixed_deck
 
 def timeout():
     return create_app(
-        RoomManager(deck=fixed_deck("showdown")),
+        RoomManager(ruleset="legacy", deck=fixed_deck("showdown")),
         turn_duration=400_000_000,
     )
 
 
 def recovery():
     return create_app(
-        RoomManager(deck=fixed_deck("showdown")),
+        RoomManager(ruleset="legacy", deck=fixed_deck("showdown")),
         turn_duration=2 * SECOND,
         grace_duration=SECOND,
     )

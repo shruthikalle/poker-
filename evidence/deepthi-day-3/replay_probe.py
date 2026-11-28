@@ -8,7 +8,7 @@ from server.coordinator import GameCoordinator
 
 def main():
     tokens = iter(("fixture-a", "fixture-b"))
-    rooms = RoomManager(token_factory=tokens.__next__)
+    rooms = RoomManager(ruleset="legacy", token_factory=tokens.__next__)
     game = GameCoordinator(rooms)
     game.admit(rooms.join, rooms.create(10).room_code)
     a = Connection(None, gameplay=True)

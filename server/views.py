@@ -59,6 +59,8 @@ def player_view(
         if timing is not None and timing.result is not None
         else hand.match_winner,
     )
+    if hand.ruleset == "pdf":
+        view["bet_increment"] = 20 if hand.phase in ("turn", "river") else 10
     return view
 
 

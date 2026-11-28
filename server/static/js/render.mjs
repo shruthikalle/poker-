@@ -110,7 +110,9 @@ export function renderTable(state) {
 
   text("connection-label", connectionLabels[status]);
   text("room-code", session.room_code);
-  text("game-meta", `PLAYER ${session.seat} · BET UNIT ${session.bet_unit}`);
+  text("game-meta", view?.bet_increment !== undefined
+    ? `PLAYER ${session.seat} · 5 / 10 BLINDS · PDF RULES`
+    : `PLAYER ${session.seat} · BET UNIT ${session.bet_unit}`);
   const retry = ["offline", "replaced", "protocol"].includes(status);
   byId("reconnect").hidden = !retry;
   const hasHand = Boolean(view?.hand_id);

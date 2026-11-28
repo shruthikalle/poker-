@@ -26,7 +26,9 @@ class SessionStore:
         self._manager = (
             manager
             if manager is not None
-            else RoomManager(code_factory=code_factory, token_factory=token_factory)
+            else RoomManager(
+                code_factory=code_factory, token_factory=token_factory, ruleset="legacy"
+            )
         )
 
     def create(self) -> tuple[str, str]:

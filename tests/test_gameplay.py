@@ -32,7 +32,7 @@ def move(state, player: str, action: str):
 
 
 def reach_flop(deck=WINNER_DECK):
-    state = new_game(deck=deck)
+    state = new_game(ruleset="legacy", deck=deck)
     state = move(state, "A", "call")
     return move(state, "B", "check")
 
@@ -46,7 +46,7 @@ def reach_showdown(deck=WINNER_DECK):
 
 class BettingTests(unittest.TestCase):
     def test_big_blind_may_raise_after_small_blind_calls(self) -> None:
-        state = move(new_game(deck=WINNER_DECK), "A", "call")
+        state = move(new_game(ruleset="legacy", deck=WINNER_DECK), "A", "call")
         self.assertEqual(legal_actions(state, "B"), {"fold", "check", "raise"})
         raised = move(state, "B", "raise")
         self.assertEqual(
@@ -112,7 +112,7 @@ class BettingTests(unittest.TestCase):
         self.assertIs(result.state, state)
 
     def test_g10_match_ends_if_next_big_blind_cannot_be_posted(self) -> None:
-        state = replace(new_game(deck=WINNER_DECK), stacks=(10, 375))
+        state = replace(new_game(ruleset="legacy", deck=WINNER_DECK), stacks=(10, 375))
         result = move(state, "A", "fold")
         self.assertEqual(result.stacks, (10, 390))
         self.assertEqual(result.match_winner, "B")
@@ -120,7 +120,7 @@ class BettingTests(unittest.TestCase):
         self.assertEqual(legal_actions(result, "B"), set())
 
     def test_g11_second_hand_alternates_button_and_blinds(self) -> None:
-        finished = move(new_game(deck=WINNER_DECK), "A", "fold")
+        finished = move(new_game(ruleset="legacy", deck=WINNER_DECK), "A", "fold")
         self.assertEqual(legal_actions(finished, "A"), {"ready"})
         waiting = move(finished, "A", "ready")
         self.assertEqual(waiting.ready_players, (True, False))
@@ -139,7 +139,7 @@ class BettingTests(unittest.TestCase):
         self.assertEqual(second.ready_players, (False, False))
 
     def test_r10_repeated_ready_does_not_start_a_new_hand(self) -> None:
-        finished = move(new_game(deck=WINNER_DECK), "A", "fold")
+        finished = move(new_game(ruleset="legacy", deck=WINNER_DECK), "A", "fold")
         waiting = move(finished, "A", "ready")
         again = apply_action(waiting, "A", "ready")
         self.assertFalse(again.accepted)
@@ -147,7 +147,7 @@ class BettingTests(unittest.TestCase):
         self.assertEqual(waiting.hand_number, 1)
 
     def test_g12_raise_cap_resets_after_round(self) -> None:
-        state = new_game(deck=WINNER_DECK)
+        state = new_game(ruleset="legacy", deck=WINNER_DECK)
         state = move(state, "A", "raise")
         state = move(state, "B", "raise")
         self.assertEqual(state.raise_count, 2)
@@ -156,7 +156,7 @@ class BettingTests(unittest.TestCase):
         self.assertIn("bet", legal_actions(flop, "B"))
 
     def test_r2_reject_invalid_actions_without_mutating_state(self) -> None:
-        state = new_game(deck=WINNER_DECK)
+        state = new_game(ruleset="legacy", deck=WINNER_DECK)
         for action in ("check", "bet", "raise:30", "dance"):
             with self.subTest(action=action):
                 result = apply_action(state, "A", action)
@@ -183,10 +183,10 @@ class DealTests(unittest.TestCase):
         for deck in (ALL_CARDS[:-1], ALL_CARDS[:-1] + (ALL_CARDS[0],)):
             with self.subTest(deck=deck[-2:]):
                 with self.assertRaises(ValueError):
-                    new_game(deck=deck)
+                    new_game(ruleset="legacy", deck=deck)
 
     def test_c3_bad_next_deck_leaves_finished_hand_unchanged(self) -> None:
-        state = move(new_game(deck=WINNER_DECK), "A", "fold")
+        state = move(new_game(ruleset="legacy", deck=WINNER_DECK), "A", "fold")
         state = move(state, "A", "ready")
         result = apply_action(state, "B", "ready", deck=ALL_CARDS[:-1])
         self.assertFalse(result.accepted)
@@ -196,7 +196,7 @@ class DealTests(unittest.TestCase):
         for unit in (0, 3, 22, True, 2.5):
             with self.subTest(unit=unit):
                 with self.assertRaises(ValueError):
-                    new_game(bet_unit=unit)
+                    new_game(ruleset="legacy", bet_unit=unit)
 
 
 if __name__ == "__main__":

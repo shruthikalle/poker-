@@ -1,6 +1,6 @@
-# Alternative poker rules draft
+# PDF poker rules
 
-Status: unapproved alternative. See the [implemented variant](rules-reconciliation.md).
+Status: selected by Srishruthik as the project source of truth and implemented by the normal application. The [legacy variant](rules-reconciliation.md) remains for historical tests and evidence.
 
 ## Table, deal, and turn order
 
@@ -18,7 +18,7 @@ Status: unapproved alternative. See the [implemented variant](rules-reconciliati
 - No all-ins or side pots. Call is legal only if it leaves at least one chip. Bet or raise is legal only if the actor can pay while retaining at least one chip **and** the opponent can cover the resulting amount owed while retaining at least one chip. Fold stays legal for an actor who cannot call. If neither can bet, they may check through the remaining streets.
 - A street closes when required action opportunities are complete and street commitments match. A small-blind call preserves the big blind's check or raise option. Two checks close a street when no bet is outstanding.
 - Fold settles the pot immediately without revealing the losing hand. At showdown, compare the best five cards of each seven-card set. Award the pot once; split ties and give any odd chip to the nondealer. A completed hand has no actor and pot zero.
-- Do not start a new hand if a player cannot post the blind they would owe while keeping at least one chip. The terminal match outcome needs a shared engine/server convention.
+- Do not start a new hand if a player cannot post the blind they would owe while keeping at least one chip; the other player wins the match.
 
 ## Independent expected values
 
@@ -36,10 +36,10 @@ These values are hand-calculated from the target rules; they are not output from
 
 At every accepted transition, A stack + B stack + pot = 1,000. No balance or pot is negative. A rejected action preserves the entire authoritative state, including private cards and deck position.
 
-Known showdown oracle: board `Ah Kh Qh Jc 2d`, A `9h 5h`, B `Ts 3c`; A's flush beats B's straight. Add independent fixtures for a board-playing tie, kicker, wheel straight, full house versus flush, and quads versus full house. A fixed deck fixture must include the three burn cards in the correct positions.
+Known showdown oracle: board `Ah Kh Qh Jc 2d`, A `9h 5h`, B `Ts 3c`; A's flush beats B's straight. The PDF-rule tests also cover a board-playing tie, kicker, wheel straight, full house versus flush, and quads versus full house. Each fixed deck includes the three burn cards in the correct positions.
 
-## Migration and joint decisions
+## Implementation and remaining review
 
-The current `poker/engine.py` uses 200 chips, a configurable bet unit on every street, two raises, no burn cards, and odd chip to the button. Its 22 tests pass for those older rules. Migration would require corresponding engine and fixture changes.
+The normal `poker.server:create_app` factory creates a PDF-rule room. `poker.engine` retains `ruleset="legacy"` for historical tests. The PDF-rule path is exercised by `tests/test_pdf_rules.py` and the two-browser fixture in `evidence/pdf-rules/browser_smoke.py`.
 
-Both partners should settle: (1) the exact terminal match result when a future blind cannot be paid; (2) final engine API and whether hand ID/revision are server-owned; (3) whether any host-configurable settings remain. This target uses fixed 500 chips and 5/10 blinds, so the old adjustable bet-unit room flow should not be assumed.
+The server owns hand revisions; the engine's `hand_number` is the wire hand ID. The normal app fixes 500 chips and 5/10 blinds. When either seat cannot post its next assigned blind while retaining one chip, the other seat is the match winner. Since total chips remain 1,000 after settlement, both seats cannot simultaneously fail that threshold. The interrupted-pot transport policy remains separate from hand settlement and should be reviewed jointly.

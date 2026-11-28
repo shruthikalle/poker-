@@ -1,12 +1,12 @@
 # Multiplayer integration contract
 
-The application owns admission, seat credentials, transport, and match coordination. See the [implemented rules](rules-reconciliation.md) and [alternative draft](rules.md). The engine owns
+The application owns admission, seat credentials, transport, and match coordination. The normal app follows the [PDF rules](rules.md); historical fixtures use the [legacy variant](rules-reconciliation.md). The engine owns
 the authoritative immutable state and transitions for a poker hand. The browser
 renders the server's views and submits requests.
 
 ## Engine boundary
 
-The existing engine exposes `new_game(bet_unit=10, deck=None)`,
+The engine exposes `new_game(bet_unit=10, deck=None, *, ruleset=...)`,
 `legal_actions(state, player)`, and `apply_action(state, player, action)`.
 `new_game` deals immediately, posts blinds, and selects A as the first actor.
 It accepts a fixed full deck for fixtures. `legal_actions` returns the
@@ -20,7 +20,7 @@ the creator and B to the joiner, then authenticates future commands against
 the separate private token issued to that seat. Creation leaves the hand
 absent. A per-app lock serializes creation, guest allocation, first-hand
 initialization, and authentication reads. B's session and the engine state
-are published together after initialization succeeds. Creation fixes the bet unit before the guest joins.
+are published together after initialization succeeds. Creation fixes the bet unit before the guest joins. In the normal PDF-rule app, only bet unit 10 is accepted and each stack starts at 500. The other even units are available only to legacy fixtures.
 
 The engine settles showdown and folds. A paid showdown has
 `phase="showdown"` and a zero pot. At showdown, `winner=None` means a tie.
@@ -43,6 +43,7 @@ process exit. Separate factory calls provide isolated state for tests.
 | Request | Success |
 | --- | --- |
 | `GET /health` | 200 with `{"status":"ok"}` |
+| `GET /api/config` | 200 with the active ruleset and PDF table settings, or null legacy settings. |
 | `POST /api/rooms` with `{"bet_unit":10}` | 201 with A's admission |
 | `POST /api/rooms/join` with `{"room_code":"…"}` | 200 with B's admission |
 
@@ -194,6 +195,7 @@ snapshot sets `status: "ready"` and adds:
 | --- | --- |
 | `hand_id`, `phase`, `button`, `actor` | Engine hand number, current phase, dealer, and acting seat or null. |
 | `stacks`, `contributions`, `pot`, `raise_count`, `board` | Public betting values, per-seat chip maps, and revealed board only. |
+| `bet_increment` | In PDF-rule hands, 10 preflop/flop or 20 turn/river for browser action labels. Absent from historical legacy views. |
 | `ready_seats` | Public per-seat Ready flags for the settled hand. |
 | `own_hole_cards`, `legal_actions`, `can_ready` | The recipient's cards, betting actions, and separate Ready eligibility. |
 | `result`, `match_winner` | Hand result or null, and terminal match winner or null. |
@@ -248,12 +250,14 @@ Conflicting reuse of any retained identifier is rejected. Wrong-hand
 requests with no retained record never reach the engine. Malformed frames,
 pre-deal requests, and replay conflicts do not enter either ledger.
 
-Accepted memory is bounded by the engine. At most four actions resolve
-preflop after the blinds. At most five resolve each other street, including
-an optional opening check, a bet, two raises, and a call. A fold ends
-the hand early. Two Ready transitions give at most 21 accepted mutations
-per hand across both seats. Automatic actions take an engine turn without
-entering a client ledger.
+Accepted memory is bounded by the engine. Under PDF rules, at most five
+actions resolve preflop after the blinds: a call, three raises, and a call.
+At most six resolve each later
+street: an optional opening check, a bet, three raises, and a call. A fold
+ends the hand early. Two Ready transitions give at most 25 accepted
+mutations per hand across both seats. Historical legacy fixtures retain
+the two-raise limit, at most four preflop actions, and at most 21 accepted mutations. Automatic actions
+take an engine turn without entering a client ledger.
 
 Each persistent connection has its own FIFO queue of 32 frames and one
 writer. A stalled client cannot block a room commit or another writer.

@@ -92,6 +92,15 @@ test("signals authority only for server-offered moves, and labels exact fixed am
   assert.equal(actionLabel("raise", state), "Raise · 15");
 });
 
+test("PDF rule snapshots label the turn and river increment", () => {
+  const turn = snapshot({phase: "turn", bet_increment: 20,
+    contributions: {A: 0, B: 20}, legal_actions: ["call", "raise"]});
+  assert.deepEqual(readSnapshot(turn, "A"), turn);
+  assert.equal(actionLabel("call", turn), "Call · 20");
+  assert.equal(actionLabel("raise", turn), "Raise · 40");
+  assert.equal(readSnapshot({...turn, bet_increment: 10}, "A"), null);
+});
+
 test("session storage retains only seat metadata and exact unresolved payload", () => {
   const map = new Map();
   const storage = {getItem: key => map.get(key), setItem: (key, value) => map.set(key, value),

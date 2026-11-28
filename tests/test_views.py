@@ -44,7 +44,7 @@ class PlayerViewTests(unittest.TestCase):
         )
 
     def test_first_hand_exact_fields_and_no_hidden_cards(self):
-        hand = new_game(deck=fixed_deck("showdown"))
+        hand = new_game(ruleset="legacy", deck=fixed_deck("showdown"))
         room = replace(self.room, hand=hand, seat_b_token="private-token-b")
         for seat, own, hidden, actions in (
             ("A", ["9h", "5h"], ["Ts", "3c"], ["call", "fold", "raise"]),
@@ -72,7 +72,9 @@ class PlayerViewTests(unittest.TestCase):
                     self.assertNotIn(json.dumps(value), serialized)
 
     def test_fold_and_match_winner_are_distinct(self):
-        starting = replace(new_game(deck=fixed_deck("fold")), stacks=(10, 375))
+        starting = replace(
+            new_game(ruleset="legacy", deck=fixed_deck("fold")), stacks=(10, 375)
+        )
         hand = apply_action(starting, "A", "fold").state
         room = replace(self.room, hand=hand, seat_b_token="private-token-b")
         view = player_view(room, "B", 2)
@@ -87,7 +89,7 @@ class PlayerViewTests(unittest.TestCase):
             ("tie", "showdown_tie", None),
         ):
             with self.subTest(scenario=scenario):
-                hand = new_game(deck=fixed_deck(scenario))
+                hand = new_game(ruleset="legacy", deck=fixed_deck(scenario))
                 hand = apply_action(hand, "A", "call").state
                 for seat in ("B", "B", "A", "B", "A", "B", "A"):
                     result = apply_action(hand, seat, "check")

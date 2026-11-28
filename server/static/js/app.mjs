@@ -18,6 +18,7 @@ let invalidAdmissionField = null;
 let recoveryAttempts = 0;
 let displayTimer = null;
 let lastTouch = null;
+let tableRules = "legacy";
 const watchdog = commandWatchdog(() => {
   if (recoveryAttempts >= 2) {
     state.notice = "The server still has not confirmed the latest state. Reconnect to check it.";
@@ -168,7 +169,9 @@ function submitAdmission(event, kind) {
   event.preventDefault();
   if (admission || admissionPending || state.session) return;
   const field = kind === "create" ? "bet-unit" : "room-input";
-  const input = kind === "create" ? Number(byId(field).value) : byId(field).value.trim();
+  const input = kind === "create"
+    ? tableRules === "pdf" ? 10 : Number(byId(field).value)
+    : byId(field).value.trim();
   invalidAdmissionField = null;
   if (kind === "create" ? !validUnit(input) : !input || input.length > 128) {
     invalidAdmissionField = field;
@@ -231,11 +234,27 @@ for (const id of ["bet-unit", "room-input"]) {
   });
 }
 byId("bet-unit").addEventListener("change", event => {
+  if (tableRules === "pdf") return;
   const unit = Number(event.currentTarget.value);
   if (!validUnit(unit)) return;
   byId("preview-stack").textContent = String(20 * unit);
   byId("preview-blinds").textContent = `${unit / 2} / ${unit}`;
   byId("preview-increment").textContent = String(unit);
+});
+fetch("./api/config", {mode: "same-origin"}).then(response => response.json()).then(config => {
+  if (config.ruleset !== "pdf") return;
+  tableRules = "pdf";
+  const select = byId("bet-unit");
+  select.replaceChildren(new Option("10 (fixed)", "10"));
+  select.disabled = true;
+  byId("bet-unit-label").textContent = "Big blind";
+  byId("preview-stack").textContent = "500";
+  byId("preview-blinds").textContent = "5 / 10";
+  byId("preview-increment").textContent = "10 preflop/flop · 20 turn/river";
+  byId("rules-summary").textContent = "Two players start with 500 virtual chips. Blinds are 5/10. Bets and raises use 10 chips preflop and flop, then 20 on turn and river. Up to three raises follow the opening wager. Burn one card before each board street. No all-ins or side pots.";
+}).catch(() => {
+  state.notice = "Could not load table rules. Reload before creating a room.";
+  draw();
 });
 byId("actions").addEventListener("click", event => {
   const button = event.target.closest("button[data-action]");

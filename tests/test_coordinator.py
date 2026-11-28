@@ -30,7 +30,7 @@ class CoordinatorTests(unittest.TestCase):
     def setUp(self):
         tokens = iter(("test-token-a", "test-token-b"))
         self.rooms = RoomManager(
-            token_factory=tokens.__next__, deck=fixed_deck("showdown")
+            ruleset="legacy", token_factory=tokens.__next__, deck=fixed_deck("showdown")
         )
         self.game = GameCoordinator(self.rooms, replay_capacity=4)
         room_code = self.rooms.create(10).room_code
@@ -213,7 +213,7 @@ class DeliveryTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         tokens = iter(("test-token-a", "test-token-b"))
         self.rooms = RoomManager(
-            token_factory=tokens.__next__, deck=fixed_deck("showdown")
+            ruleset="legacy", token_factory=tokens.__next__, deck=fixed_deck("showdown")
         )
         self.game = GameCoordinator(self.rooms)
         self.game.admit(self.rooms.join, self.rooms.create(10).room_code)

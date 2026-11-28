@@ -7,6 +7,20 @@ Scenario = Literal["showdown", "fold", "tie"]
 # Deal order is A, B, A, B, followed by the board with no burns.
 WINNER_PREFIX = ("9h", "Ts", "5h", "3c", "Ah", "Kh", "Qh", "Jc", "2d")
 TIE_PREFIX = ("2c", "3d", "4c", "5d", "As", "Ks", "Qs", "Js", "Ts")
+PDF_WINNER_PREFIX = (
+    "9h",
+    "Ts",
+    "5h",
+    "3c",
+    "2c",
+    "Ah",
+    "Kh",
+    "Qh",
+    "4d",
+    "Jc",
+    "6s",
+    "2d",
+)
 
 
 def fixed_deck(scenario: Scenario) -> tuple[str, ...]:
@@ -16,6 +30,16 @@ def fixed_deck(scenario: Scenario) -> tuple[str, ...]:
         for rank in "23456789TJQKA"
         for suit in "cdhs"
         if (card := rank + suit) not in prefix
+    )
+
+
+def fixed_pdf_deck() -> tuple[str, ...]:
+    """A flush-over-straight deal with one burn before each board street."""
+    return PDF_WINNER_PREFIX + tuple(
+        card
+        for rank in "23456789TJQKA"
+        for suit in "cdhs"
+        if (card := rank + suit) not in PDF_WINNER_PREFIX
     )
 
 

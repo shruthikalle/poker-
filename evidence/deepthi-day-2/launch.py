@@ -6,8 +6,8 @@ from server.fixtures import fixed_deck
 
 
 def showdown():
-    return create_app(RoomManager(deck=fixed_deck("showdown")))
+    return create_app(RoomManager(ruleset="legacy", deck=fixed_deck("showdown")))
 
 
 def tie():
-    return create_app(RoomManager(deck=fixed_deck("tie")))
+    return create_app(RoomManager(ruleset="legacy", deck=fixed_deck("tie")))

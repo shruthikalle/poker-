@@ -53,6 +53,8 @@ export function readSnapshot(frame, seat) {
       !Array.isArray(frame.legal_actions) || !frame.legal_actions.every(move => moves.includes(move)) ||
       typeof frame.can_ready !== "boolean" || !pair(frame.ready_seats, value => typeof value === "boolean") ||
       !validResult(frame.result) || !seatOrNull(frame.match_winner)) return null;
+  if (frame.bet_increment !== undefined &&
+      frame.bet_increment !== (frame.phase === "turn" || frame.phase === "river" ? 20 : 10)) return null;
   if (frame.result && Object.hasOwn(frame.result, "showdown_hole_cards") &&
       (frame.phase !== "showdown" || frame.pot !== 0 || frame.result.kind === "fold_win" ||
        (terminal && terminal.reason !== "engine") ||
@@ -142,7 +144,8 @@ export function actionLabel(move, snapshot) {
   const owed = Math.max(snapshot.contributions.A, snapshot.contributions.B) -
     snapshot.contributions[snapshot.seat];
   if (move === "call") return `Call · ${owed}`;
-  if (move === "bet") return `Bet · ${snapshot.bet_unit}`;
-  if (move === "raise") return `Raise · ${owed + snapshot.bet_unit}`;
+  const increment = snapshot.bet_increment ?? snapshot.bet_unit;
+  if (move === "bet") return `Bet · ${increment}`;
+  if (move === "raise") return `Raise · ${owed + increment}`;
   return label;
 }

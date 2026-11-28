@@ -15,6 +15,7 @@ from treys import Card, Evaluator
 Player = Literal["A", "B"]
 Phase = Literal["preflop", "flop", "turn", "river", "showdown", "finished"]
 Action = Literal["fold", "check", "call", "bet", "raise", "ready"]
+Ruleset = Literal["legacy", "pdf"]
 
 _RANKS = "23456789TJQKA"
 _SUITS = "cdhs"
@@ -62,6 +63,8 @@ class GameState:
     match_winner: Player | None = None
     ready_players: tuple[bool, bool] = (False, False)
     hand_number: int = 1
+    ruleset: Ruleset = "pdf"
+    burn_cards: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -93,18 +96,27 @@ def _deal_hole_cards(
     return ((deck[1], deck[3]), (deck[0], deck[2]))
 
 
-def new_game(bet_unit: int = 10, deck: tuple[str, ...] | None = None) -> GameState:
-    """Create the first hand with A as button and 20 bet units per player."""
+def new_game(
+    bet_unit: int = 10,
+    deck: tuple[str, ...] | None = None,
+    *,
+    ruleset: Ruleset = "pdf",
+) -> GameState:
+    """Create the first hand; the PDF rules use fixed 500-chip stacks."""
 
     if isinstance(bet_unit, bool) or not isinstance(bet_unit, int):
         raise ValueError("bet unit must be an even integer from 2 to 20")
     if bet_unit < 2 or bet_unit > 20 or bet_unit % 2:
         raise ValueError("bet unit must be an even integer from 2 to 20")
+    if ruleset not in ("legacy", "pdf"):
+        raise ValueError("unknown ruleset")
+    if ruleset == "pdf" and bet_unit != 10:
+        raise ValueError("PDF rules require a fixed 10-chip big blind")
     deck = _deck_or_shuffle(deck)
 
     # Deal alternating cards, starting with the button.
     hole_cards = _deal_hole_cards(deck, "A")
-    chips = 20 * bet_unit
+    chips = 500 if ruleset == "pdf" else 20 * bet_unit
     return GameState(
         bet_unit=bet_unit,
         button="A",
@@ -116,7 +128,25 @@ def new_game(bet_unit: int = 10, deck: tuple[str, ...] | None = None) -> GameSta
         deck=deck[4:],
         phase="preflop",
         actor="A",
+        ruleset=ruleset,
     )
+
+
+def _increment(state: GameState) -> int:
+    if state.ruleset == "pdf" and state.phase in ("turn", "river"):
+        return 20
+    return state.bet_unit
+
+
+def _can_raise_or_bet(state: GameState, player: Player, payment: int) -> bool:
+    own = _index(player)
+    if state.stacks[own] <= payment:
+        return False
+    if state.ruleset != "pdf":
+        return True
+    target = state.contributions[own] + payment
+    opponent = _index(_other(player))
+    return state.stacks[opponent] > target - state.contributions[opponent]
 
 
 def legal_actions(state: GameState, player: Player) -> frozenset[Action]:
@@ -138,13 +168,15 @@ def legal_actions(state: GameState, player: Player) -> frozenset[Action]:
     if owed:
         if stack > owed:
             actions.add("call")
-        if state.raise_count < 2 and stack > owed + state.bet_unit:
+        if state.raise_count < (
+            3 if state.ruleset == "pdf" else 2
+        ) and _can_raise_or_bet(state, player, owed + _increment(state)):
             actions.add("raise")
     else:
         actions.add("check")
-        if stack > state.bet_unit:
+        if _can_raise_or_bet(state, player, _increment(state)):
             if state.big_blind_option and state.phase == "preflop":
-                if state.raise_count < 2:
+                if state.raise_count < (3 if state.ruleset == "pdf" else 2):
                     actions.add("raise")
             elif max(state.contributions) == 0:
                 actions.add("bet")
@@ -163,10 +195,16 @@ def _pay(state: GameState, player: Player, amount: int) -> GameState:
     )
 
 
-def _match_winner(stacks: tuple[int, int], bet_unit: int) -> Player | None:
-    if stacks[0] <= bet_unit:
+def _match_winner(state: GameState, stacks: tuple[int, int]) -> Player | None:
+    if state.ruleset == "pdf":
+        next_button = _other(state.button)
+        required_a = 5 if next_button == "A" else 10
+        required_b = 5 if next_button == "B" else 10
+    else:
+        required_a = required_b = state.bet_unit
+    if stacks[0] <= required_a:
         return "B"
-    if stacks[1] <= bet_unit:
+    if stacks[1] <= required_b:
         return "A"
     return None
 
@@ -188,7 +226,7 @@ def _finish_hand(
         checks_in_row=0,
         big_blind_option=False,
         winner=winner,
-        match_winner=_match_winner(stacks, state.bet_unit),
+        match_winner=_match_winner(state, stacks),
         ready_players=(False, False),
     )
 
@@ -215,7 +253,8 @@ def _showdown(state: GameState) -> GameState:
         winner = None
         stacks[0] += state.pot // 2
         stacks[1] += state.pot // 2
-        stacks[_index(state.button)] += state.pot % 2
+        odd_chip_seat = _other(state.button) if state.ruleset == "pdf" else state.button
+        stacks[_index(odd_chip_seat)] += state.pot % 2
     return _finish_hand(state, (stacks[0], stacks[1]), "showdown", winner)
 
 
@@ -238,6 +277,7 @@ def _start_next_hand(state: GameState, deck: tuple[str, ...]) -> GameState:
         hole_cards=_deal_hole_cards(deck, button),
         board=(),
         deck=deck[4:],
+        burn_cards=(),
         phase="preflop",
         actor=button,
         raise_count=0,
@@ -255,12 +295,14 @@ def _advance_round(state: GameState) -> GameState:
     if phase == "showdown":
         return _showdown(state)
     count = 3 if phase == "flop" else 1
+    burn = 1 if state.ruleset == "pdf" else 0
     return replace(
         state,
         phase=phase,
         actor=_other(state.button),
-        board=state.board + state.deck[:count],
-        deck=state.deck[count:],
+        board=state.board + state.deck[burn : burn + count],
+        deck=state.deck[burn + count :],
+        burn_cards=state.burn_cards + state.deck[:burn],
         contributions=(0, 0),
         raise_count=0,
         checks_in_row=0,
@@ -327,13 +369,13 @@ def apply_action(
             return ActionResult(True, _advance_round(state))
         return ActionResult(True, replace(state, actor=_other(player), checks_in_row=1))
     if action == "bet":
-        paid = _pay(state, player, state.bet_unit)
+        paid = _pay(state, player, _increment(state))
         return ActionResult(
             True,
             replace(paid, actor=_other(player), checks_in_row=0),
         )
     # The remaining legal action is raise.
-    paid = _pay(state, player, owed + state.bet_unit)
+    paid = _pay(state, player, owed + _increment(state))
     return ActionResult(
         True,
         replace(

@@ -16,7 +16,9 @@ from server.fixtures import fixed_deck
 
 def make_room():
     tokens = iter(("test-token-a", "test-token-b"))
-    rooms = RoomManager(token_factory=tokens.__next__, deck=fixed_deck("showdown"))
+    rooms = RoomManager(
+        ruleset="legacy", token_factory=tokens.__next__, deck=fixed_deck("showdown")
+    )
     rooms.join(rooms.create(10).room_code)
     return rooms
 
