@@ -37,13 +37,15 @@ strings. The coordinator uses `apply_action` for betting and Ready.
 
 ## Implemented transport
 
-Run one Uvicorn worker and one app instance. The in-memory room lives until
-process exit. Separate factory calls provide isolated state for tests.
+Run one Uvicorn worker and one app instance. The process holds at most one
+room. An eligible terminal room stays allocated until explicit release
+or process exit. Separate factory calls provide isolated state for tests.
 
 | Request | Success |
 | --- | --- |
 | `GET /health` | 200 with `{"status":"ok"}` |
 | `GET /api/config` | 200 with the active ruleset and PDF table settings, or null legacy settings. |
+| `GET /api/admission-context` | 200 with `{"context":"…"}` and `Cache-Control: no-store`. |
 | `POST /api/rooms` with `{"bet_unit":10}` | 201 with A's admission |
 | `POST /api/rooms/join` with `{"room_code":"…"}` | 200 with B's admission |
 
@@ -56,33 +58,49 @@ a fixed `detail` string with 422 for invalid input, 404 for an unknown code,
 or 409 for an existing room or full room. A supplied foreign browser
 origin is rejected with 403.
 
-### Recovering canonical admission
+### Recovering admission
 
-The two canonical room routes accept an optional `Admission-Key`
-header with exactly 64 lower-case hexadecimal characters. The browser
-generates this bearer recovery credential from 32 cryptographically
-random bytes and keeps it out of URLs. The request identity is the
-operation and its validated value (numeric bet unit for create, exact
-case-sensitive room code for join).
+On explicit create or join, fetch the current context, a 32-character
+lowercase hexadecimal string. To recover an ambiguous HTTP response, send
+`Admission-Key: <context>.<nonce>`, where the nonce is 64 lowercase
+hexadecimal characters generated from 32 cryptographically random bytes.
+Keep this bearer recovery key out of URLs and logs. The context by itself
+is public and confers no seat authority. A non-retrying client can send
+`Admission-Context: <context>` instead. Send at most one of the two
+headers. The request identity is the operation and its validated value
+(numeric bet unit for create, exact case-sensitive room code for join).
 
 Under the room lock, the server either allocates the seat and records
 the original response, replays the same response and HTTP status, or
-returns 409 for a key bound to a different request. Malformed or
-duplicate headers receive 422. An unknown well-formed key follows
-ordinary allocation rules. It cannot recover seats that another
-credential reserved. Existing originless clients and calls without this
-header retain their admission behavior. The legacy lobby routes do
-not use keyed admission.
+returns 409 for a key bound to a different request. Malformed or duplicate
+headers receive 422. An unknown key for the current context follows
+ordinary allocation rules. Both room routes and both lobby admission
+routes use this validation. An exact replay through the same route
+preserves its response and status. A compatible request through the other
+route can recover the same seat in that route's response format.
 
 The room retains a digest and the original successful response for each
 keyed seat, up to two records. Rejections do not consume storage.
 Replay does not initialize a new hand, post blinds, publish another
 lobby event, or update the historical admission body. Recovering A's
 admission can still report `waiting` after B joins. Authenticate on the
-socket to obtain current state. Records expire with process exit. After
-a restart an explicitly retried create may create a new room if the
-process is empty. A retried join still needs its original room code.
-Neither replay nor session recovery persists across restart.
+socket to obtain current state. Release discards both recovery records
+and rotates the verifiable context under the same lock. A well-formed key
+or context from a prior generation receives HTTP 409 `{"detail":"ADMISSION_EXPIRED"}`
+even after the recovery records are gone. Expired requests cannot
+allocate or disclose a seat. Clients retain the exact key on an ambiguous
+retry and fetch a context only after a deliberate new admission request.
+A context-bound request also expires after a process restart, because
+the new app uses a different process secret.
+
+For compatibility, the first allocation after process startup accepts
+the old unscoped 64-character key and requests without a context. Once
+the first room is released, all four routes require the current context.
+An unscoped or missing context then receives `ADMISSION_EXPIRED`.
+After a process restart, the startup compatibility window opens again.
+An unscoped request has no generation evidence and can allocate in that
+window if the process is empty. Scope admission keys to obtain fail-closed
+retries across restarts. All sessions and replay contents are in memory.
 
 The lobby routes share the same two seats and credentials.
 
@@ -103,6 +121,8 @@ with code 1008 and no application payload. A successful handshake sends
 exactly `type: "room_status"`, `seat`, `bet_unit`, and `status` for the
 authenticated seat. The socket stays open after its one-time snapshot.
 An additional application message closes it with code 1008.
+A successfully authenticated status socket closes with code 4001 on room
+retirement, as does a connected legacy lobby socket.
 
 The lobby handshake uses `{"type":"auth","token":"…"}`. Its personalized
 `lobby` message contains `your_seat`, `table_ready`, and `connected` flags
@@ -303,8 +323,7 @@ can read a terminal snapshot with their own cards. Gameplay cannot resume.
 A transport terminal outcome preserves the last engine state and any
 outstanding pot. It creates neither a new hand result nor a payout.
 Hand result, match result, and phase stay distinct. Transport terminal
-messages withhold the opponent's cards. There is no room reset endpoint,
-so a new match after terminal completion requires restarting the server.
+messages withhold the opponent's cards.
 
 One lifespan-owned scheduler waits for the earliest deadline or a
 state-change event and is canceled on shutdown. Wakeups carry no
@@ -314,8 +333,41 @@ or paused turns. Nanoseconds are internal. Wire time is ceiling-rounded
 remaining milliseconds, without process-local timestamps. Timing tests
 use a manual clock and the live smoke fixture uses shorter durations.
 
-The configurable poker rules are preserved and the final joint rules and
-forfeit-specification approval remains pending.
+### Terminal room release
+
+The current authenticated gameplay socket may send the exact object
+`{"type":"acknowledge_result"}`. Each seat can acknowledge once, and
+repeating it returns the same acknowledgment state. The terminal snapshot
+adds `room_release` with `acknowledged` (seat booleans), `eligible` (a
+server decision), and `remaining_ms` (from the original terminal
+transition, ceiling-rounded, maximum 60,000). Acknowledgment changes the
+lifecycle revision only and preserves the engine revision and result.
+
+Either seat can send `{"type":"release_room"}` once both seats have
+acknowledged, or at or after 60 seconds from the monotonic terminal
+transition if at least one acknowledged. A waiting, active, paused, or
+between-hands match returns `ROOM_NOT_TERMINAL`. A release command before
+eligibility returns `RELEASE_NOT_ELIGIBLE` and a current snapshot. If
+both players leave without acknowledging, the finished room stays
+reserved. When a seat returns it can acknowledge and request release
+under the same rule. Elapsed time never releases a room.
+
+Retirement removes current authority and clears admission records,
+command replay, saved clocks, deadlines, and connection registrations
+under the room lock. Close code 4001 signals it to the retired sockets.
+The current-socket check precedes deadline reconciliation for incoming
+messages and cleanup. The one scheduler fences a captured wakeup by
+generation before reconciling it. Network I/O runs outside the room lock.
+Retirement discards the final state without creating a payout.
+
+A gameplay handshake using a verifiably retired session in the same
+process closes with 4001 and sends no room data. The HTTP session endpoint
+returns its ordinary 401. Other invalid gameplay credentials use the usual
+unauthorized path. A signed, process-local token format supports the
+distinction without storing retired tokens. New rooms start with fresh
+credentials, admission context, normal blinds, and initial hand and
+revisions. The separate final joint poker-rule and interrupted-pot
+approvals remain pending.
 
 
 ## Browser client
@@ -336,8 +388,9 @@ the room. If both stay equal the arrival can refresh the clock sample.
 The current WebSocket generation alone may publish state. A terminal
 snapshot remains terminal for that browser session.
 
-Before admission, the browser saves the pending operation, input, and
-recovery key in per-tab `sessionStorage`. Ambiguous failures retain that
+Before admission, the browser fetches the current context and saves the
+pending operation, input, and scoped recovery key in per-tab
+`sessionStorage`. Ambiguous failures retain that
 record and offer a deliberate retry, including after refresh. A definitive
 rejection clears it. On success the browser replaces the recovery record
 with seat, room code, bet unit, token, and any unresolved wire command.
@@ -384,6 +437,15 @@ authenticated snapshot, the latest view is marked last known and
 actions, turn estimates, and grace clocks are suspended. Terminal views
 hide the historical presence record and render the server's match result
 separately from a settled hand result.
+
+The terminal countdown requests a fresh server eligibility sample when
+one acknowledgment is present and the estimate reaches zero. Only the
+server sample enables the Release control. A 4.5-second response timeout
+checks the same session on a new socket without resending the release.
+If the first close was lost or the tab refreshed, the new handshake
+detects retirement. Confirmed retirement clears only this app's tab
+entry and table view and restores focus to the lobby heading. A player
+must take a new action to send another create or join request.
 
 This local educational app gates cards and credentials by seat and uses
 only local browser assets. It assumes a trusted machine, browser, and

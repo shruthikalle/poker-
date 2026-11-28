@@ -19,6 +19,8 @@ uv run --locked --no-dev uvicorn poker.server:create_app --factory --host 127.0.
 
 Open http://127.0.0.1:8000/ in two independent browser contexts. The table settings are fixed. Create a room, share its code, and join from the second context. The browser displays server-provided legal actions, current board, pot, stacks, timers, and result. Both players choose **Ready** after a settled hand. Refreshing the same tab can restore its seat during the reconnect grace period.
 
+After a match ends, use **Acknowledge result**. With both seats acknowledged, either can select **Release completed room** immediately. With one acknowledgment, either seat can release 60 seconds after the match ended. A completed room stays reserved until a player explicitly releases it. After release, the browsers return to the lobby, where players can explicitly create or join a fresh room.
+
 ## Architecture
 
 - [Engine](poker/engine.py): immutable state, legal actions, betting, burns, showdown, and payout. `ruleset="pdf"` selects the project rules; `ruleset="legacy"` retains older fixtures.
@@ -47,6 +49,8 @@ uv run --locked --group browser python evidence/pdf-rules/browser_smoke.py
 ```
 
 That fixture independently checks two browser seats, private cards, board progression, 1,000-chip conservation, a 540/460 paid showdown, and the rotated next hand. [PDF-rule tests](tests/test_pdf_rules.py) also check fixed stacks, three raises, 10/20 increments, burn cards, opponent coverage, and the next-blind boundary. Earlier [known-answer cases](docs/verification.md) and [evidence](evidence/submission-readiness/evidence-manifest.md) are retained as historical checks for the legacy variant.
+
+The [room lifecycle checks](evidence/room-lifecycle/verification.md) reproduce terminal retention, three consecutive browser matches in one process, and generation-scoped admission recovery across 25 rollovers.
 
 ## Limits
 
