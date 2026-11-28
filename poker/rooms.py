@@ -36,6 +36,10 @@ class AdmissionConflict(Exception):
     pass
 
 
+class AdmissionExpired(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class Admission:
     room_code: str = field(repr=False)
@@ -128,26 +132,36 @@ class RoomManager:
             signature, digest(self._secret, b"seat:" + payload, "sha256")[:12]
         )
 
+    def admission_context(self) -> str:
+        return self._tag("admission", str(self.generation))
+
     def admit_once(
         self,
         identifier: str | None,
         request: tuple[str, int | str],
         allocate: Callable[[], Admission],
+        *,
+        context: str | None = None,
     ) -> Admission:
         """Retain only successful keyed admissions for this room's lifetime."""
-        if identifier is None:
-            return allocate()
-        digest = sha256(identifier.encode("ascii")).digest()
         with self._lock:
+            if context is None:
+                if self._generation:
+                    raise AdmissionExpired
+            elif not compare_digest(context, self.admission_context()):
+                raise AdmissionExpired
+            if identifier is None:
+                return allocate()
+            key_digest = sha256(identifier.encode("ascii")).digest()
             for previous, intent, admission in self._admissions:
-                if compare_digest(digest, previous):
+                if compare_digest(key_digest, previous):
                     if intent != request:
                         raise AdmissionConflict
                     return admission
             admission = allocate()
             # Allocation itself enforces the two-seat limit. Failed allocation
             # leaves the replay records untouched.
-            self._admissions.append((digest, request, admission))
+            self._admissions.append((key_digest, request, admission))
             return admission
 
     def create(self, bet_unit: object) -> Admission:
