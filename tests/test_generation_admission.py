@@ -4,6 +4,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from secrets import token_hex
+from unittest.mock import patch
 
 from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
@@ -11,6 +12,8 @@ from fastapi.testclient import TestClient
 from poker.rooms import RoomManager
 from poker.server import create_app
 from server.clock import SECOND
+from server.connections import QUEUE_CAPACITY, Connection
+from server.coordinator import GameCoordinator
 from server.fixtures import ManualClock
 
 EXPIRED = {"detail": "ADMISSION_EXPIRED"}
@@ -40,9 +43,41 @@ class GenerationAdmissionTests(unittest.TestCase):
         self.addCleanup(self.resources.close)
         self.clock = ManualClock()
         self.rooms = RoomManager()
-        self.client = self.resources.enter_context(
-            TestClient(create_app(self.rooms, clock=self.clock))
+        self.game = GameCoordinator(self.rooms, clock=self.clock)
+        self.writers = self.peak_writers = self.peak_attach_queue = 0
+        self.schedulers = self.scheduler_starts = 0
+        original_run = Connection.run
+        original_scheduler = self.game.run_scheduler
+
+        async def run(connection, reader):
+            self.writers += 1
+            self.peak_writers = max(self.peak_writers, self.writers)
+            self.peak_attach_queue = max(
+                self.peak_attach_queue, connection.queue.qsize()
+            )
+            try:
+                await original_run(connection, reader)
+            finally:
+                self.writers -= 1
+
+        async def scheduler():
+            self.scheduler_starts += 1
+            self.schedulers += 1
+            try:
+                await original_scheduler()
+            finally:
+                self.schedulers -= 1
+
+        self.resources.enter_context(patch.object(Connection, "run", run))
+        self.resources.enter_context(
+            patch.object(self.game, "run_scheduler", scheduler)
         )
+        with patch("poker.server.GameCoordinator", return_value=self.game):
+            app = create_app(self.rooms, clock=self.clock)
+        self.resources.callback(
+            lambda: self.assertEqual((self.schedulers, self.writers), (0, 0))
+        )
+        self.client = self.resources.enter_context(TestClient(app))
 
     def context(self):
         response = self.client.get("/api/admission-context")
@@ -163,11 +198,24 @@ class GenerationAdmissionTests(unittest.TestCase):
                 self.assertEqual(self.rooms.generation, generation + 1)
                 self.assertIsNone(self.rooms.snapshot())
                 self.assertEqual(self.rooms._admissions, [])
+                self.assertEqual(self.game._connections.active(), ())
+                self.assertEqual((self.game._accepted, self.game._rejected), ({}, {}))
+                self.assertEqual(self.game._timing.next_deadline, None)
+                self.assertEqual((self.writers, self.schedulers), (0, 1))
                 self.assertEqual(self.create(create_key).json(), EXPIRED)
                 self.assertEqual(self.join(host["room_code"], join_key).json(), EXPIRED)
                 self.retired_or_unauthorized(host)
                 self.retired_or_unauthorized(guest)
         self.assertEqual((len(codes), len(tokens)), (25, 50))
+        self.assertEqual(self.scheduler_starts, 1)
+        self.assertLessEqual(self.peak_attach_queue, QUEUE_CAPACITY)
+        print(
+            f"Rollover audit: 25 rooms; 50 distinct tokens; {self.scheduler_starts} scheduler start; "
+            f"peak active gameplay/lobby writers {self.peak_writers}; "
+            f"sampled initial queue peak {self.peak_attach_queue}/{QUEUE_CAPACITY}; "
+            "0 writers, replay entries, admission records or deadlines after each release",
+            flush=True,
+        )
 
     def test_release_racing_with_admission_preserves_all_four_contracts(self):
         old_context = self.context()

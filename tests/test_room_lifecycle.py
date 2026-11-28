@@ -3,6 +3,7 @@
 import asyncio
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from threading import Barrier
 
 from poker.rooms import RoomManager
@@ -48,6 +49,25 @@ class Table:
 
 
 class PolicyTests(unittest.TestCase):
+    def test_paid_engine_terminal_result_survives_acknowledgment(self):
+        table = Table()
+        initial = table.play()
+        # Reach the existing blind boundary with a chip-conserving fixture.
+        table.rooms.commit_hand(initial, replace(initial.hand, stacks=(10, 975)))
+        table.game.submit("A", table.a, action("fold", 2, "fold"))
+        terminal = table.frames()[-1]
+        self.assertEqual(terminal["match_result"], {"reason": "engine", "winner": "B"})
+        self.assertEqual(terminal["result"], {"kind": "fold_win", "winner": "B"})
+        self.assertEqual(
+            (terminal["stacks"], terminal["pot"]), ({"A": 10, "B": 990}, 0)
+        )
+        settled = table.rooms.snapshot()
+        table.terminal()
+        table.terminal(seat="B")
+        self.assertIs(table.rooms.snapshot(), settled)
+        table.terminal(release=True)
+        self.assertIsNone(table.rooms.snapshot())
+
     def test_waiting_active_paused_and_settled_hand_cannot_release(self):
         table = Table()
         table.host = table.rooms.create(10)
