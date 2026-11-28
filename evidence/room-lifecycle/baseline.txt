@@ -1,0 +1,25 @@
+The same live probe was run against fresh processes from c8e9249 and
+868ab17. Each used that checkout's default rules and a one-second
+disconnect grace period, supplied through the existing app factory.
+
+Start the candidate application from its source checkout:
+
+  uv run --locked python -c 'import uvicorn; from poker.server import create_app; from server.clock import SECOND; uvicorn.run(create_app(grace_duration=SECOND), host="127.0.0.1", port=8041, ws="websockets-sansio", ws_max_size=4096, access_log=False)'
+
+From the checkout that contains this probe, with locked dev dependencies:
+
+  uv run --locked python evidence/room-lifecycle/rollover_probe.py --port 8041
+
+Historical checkpoint c8e9249
+POST /api/rooms -> 201; POST /api/rooms/join -> 200; two distinct seats
+Both authenticated seats observed hand 1 in play
+Terminal snapshot: {"hand_id": 1, "match_result": {"reason": "forfeit", "winner": "A"}, "pot": 15, "stacks": {"A": 195, "B": 190}}
+POST /api/rooms after terminal -> 409 {"detail":"an active room already exists"}
+Returning seat B observed the same terminal result and its own cards
+
+Current main checkpoint 868ab17
+POST /api/rooms -> 201; POST /api/rooms/join -> 200; two distinct seats
+Both authenticated seats observed hand 1 in play
+Terminal snapshot: {"hand_id": 1, "match_result": {"reason": "forfeit", "winner": "A"}, "pot": 15, "stacks": {"A": 495, "B": 490}}
+POST /api/rooms after terminal -> 409 {"detail":"an active room already exists"}
+Returning seat B observed the same terminal result and its own cards
