@@ -39,6 +39,14 @@ export function readSnapshot(frame, seat) {
         (["engine", "forfeit"].includes(terminal.reason)
           ? !seats.includes(terminal.winner) : terminal.winner !== null)) return null;
   } else if (terminal !== null) return null;
+  const release = frame.room_release;
+  if (release !== undefined && (!terminal || !record(release) ||
+      !pair(release.acknowledged, value => typeof value === "boolean") ||
+      typeof release.eligible !== "boolean" || !count(release.remaining_ms) ||
+      release.remaining_ms > 60_000 || release.eligible !== (
+        (release.acknowledged.A && release.acknowledged.B) ||
+        ((release.acknowledged.A || release.acknowledged.B) && release.remaining_ms === 0)
+      ))) return null;
   const automatic = frame.last_automatic_action;
   if (automatic !== null && (!record(automatic) || !positive(automatic.hand_id) ||
       !seats.includes(automatic.seat) || !["fold", "check"].includes(automatic.action) ||
@@ -60,6 +68,15 @@ export function readSnapshot(frame, seat) {
        (terminal && terminal.reason !== "engine") ||
        !pair(frame.result.showdown_hole_cards, value => cards(value, 2)))) return null;
   return frame;
+}
+
+export function terminalCommands(view, connected, pending) {
+  if (!connected || pending || !view?.room_release) return [];
+  const {acknowledged, eligible} = view.room_release;
+  const commands = [];
+  if (!acknowledged[view.seat]) commands.push("acknowledge_result");
+  if (eligible) commands.push("release_room");
+  return commands;
 }
 
 export function acceptsSnapshot(current, incoming) {

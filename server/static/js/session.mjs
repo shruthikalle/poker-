@@ -19,10 +19,10 @@ export function restore(storage) {
   return {session: null, pending: null};
 }
 
-export function newAdmission(kind, input, crypto = globalThis.crypto) {
+export function newAdmission(kind, input, crypto = globalThis.crypto, context = null) {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const key = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
-  return {kind, input, key};
+  return {kind, input, key: context ? `${context}.${key}` : key};
 }
 
 export function restoreAdmission(storage) {
@@ -30,7 +30,7 @@ export function restoreAdmission(storage) {
     const {kind, input, key} = JSON.parse(storage.getItem(KEY)).admission;
     const valid = kind === "create" ? validUnit(input)
       : kind === "join" && typeof input === "string" && input.length > 0 && input.length <= 128;
-    if (valid && typeof key === "string" && /^[0-9a-f]{64}$/.test(key)) {
+    if (valid && typeof key === "string" && /^(?:[0-9a-f]{32}\.)?[0-9a-f]{64}$/.test(key)) {
       return {kind, input, key};
     }
   } catch {

@@ -1,8 +1,8 @@
-import {admit, AdmissionRejected, commandWatchdog, GameplayConnection} from "./network.mjs";
+import {admissionContext, admit, AdmissionRejected, commandWatchdog, GameplayConnection} from "./network.mjs";
 import {newAdmission, persist, restore, restoreAdmission} from "./session.mjs";
 import {
   acceptsSnapshot, acknowledge, offeredMoves, readAck, readPending, readSnapshot,
-  settleSnapshot, validUnit, wireCommand,
+  remainingMs, settleSnapshot, terminalCommands, validUnit, wireCommand,
 } from "./state.mjs";
 import {byId, renderTable, renderTimers} from "./render.mjs";
 
@@ -10,13 +10,14 @@ const storage = (() => {
   try { return window.sessionStorage; } catch { return null; }
 })();
 const state = {...restore(storage), snapshot: null, sampledAt: 0, status: "idle",
-  recovering: false, notice: ""};
+  recovering: false, notice: "", terminalPending: null};
 let admission = state.session ? null : restoreAdmission(storage);
 let link;
 let admissionPending = false;
 let invalidAdmissionField = null;
 let recoveryAttempts = 0;
 let displayTimer = null;
+let lastReleasePoll = -Infinity;
 let lastTouch = null;
 let tableRules = "legacy";
 const watchdog = commandWatchdog(() => {
@@ -27,6 +28,13 @@ const watchdog = commandWatchdog(() => {
   }
   recoveryAttempts++;
   link.retryManually();
+});
+const terminalWatchdog = commandWatchdog(() => {
+  if (!state.terminalPending) return;
+  state.terminalPending = null;
+  state.notice = "The server did not confirm the request. Checking the current session.";
+  link.retryManually();
+  draw();
 });
 const errors = {
   INVALID_MESSAGE: "The server could not read the command.",
@@ -39,6 +47,8 @@ const errors = {
   HAND_COMPLETE: "The hand is already settled.",
   REPLAY_CONFLICT: "That action identifier was already used for a different command.",
   NOT_READY: "Wait until both players are connected.",
+  ROOM_NOT_TERMINAL: "Only a completed match can be released.",
+  RELEASE_NOT_ELIGIBLE: "Room release is not available yet.",
 };
 
 function save() {
@@ -55,12 +65,18 @@ function draw() {
   if (focused?.matches("#actions button") && (focused.disabled || focused.hidden)) {
     byId("action-status").focus({preventScroll: true});
   }
+  if (focused?.matches("#room-release button") && focused.disabled) {
+    result.focus({preventScroll: true});
+  }
   if (document.activeElement === byId("action-status") && !byId("result").hidden &&
       result.textContent !== previousResult) {
     result.focus({preventScroll: true});
   }
   byId("admission-forms").hidden = Boolean(admission);
   byId("admission-recovery").hidden = !admission;
+  for (const button of byId("admission-forms").querySelectorAll("button[type=submit]")) {
+    button.disabled = admissionPending;
+  }
   for (const id of ["bet-unit", "room-input"]) {
     const field = byId(id);
     if (id === invalidAdmissionField) {
@@ -80,13 +96,32 @@ function draw() {
     retry.textContent = admissionPending ? "Confirming admission…" : "Retry admission";
   }
   const view = state.snapshot;
-  const needsDisplay = state.session && state.status === "connected" && view && !view.match_result &&
-    (view.turn_clock.status === "running" || view.disconnect_grace.A || view.disconnect_grace.B);
+  const release = view?.room_release;
+  const needsDisplay = state.session && state.status === "connected" && view && (
+    (!view.match_result && (view.turn_clock.status === "running" || view.disconnect_grace.A || view.disconnect_grace.B)) ||
+    (release && !release.eligible && release.remaining_ms > 0)
+  );
   if (displayTimer !== null && !needsDisplay) {
     clearInterval(displayTimer);
     displayTimer = null;
   } else if (displayTimer === null && needsDisplay) {
-    displayTimer = setInterval(() => renderTimers(state, performance.now()), 200);
+    displayTimer = setInterval(updateTimers, 200);
+  }
+}
+
+function updateTimers() {
+  const now = performance.now();
+  renderTimers(state, now);
+  const release = state.snapshot?.room_release;
+  if (release && !release.eligible && remainingMs(release.remaining_ms, state.sampledAt, now) === 0) {
+    if (!release.acknowledged.A && !release.acknowledged.B) {
+      byId("release-countdown").hidden = true;
+      clearInterval(displayTimer);
+      displayTimer = null;
+    } else if (now - lastReleasePoll >= 1000) {
+      lastReleasePoll = now;
+      link.send({type: "snapshot_request"});
+    }
   }
 }
 
@@ -108,6 +143,10 @@ function receive(frame) {
     state.snapshot = incoming;
     state.sampledAt = performance.now();
     state.recovering = false;
+    if (state.terminalPending === "acknowledge_result" && incoming.room_release?.acknowledged[incoming.seat]) {
+      state.terminalPending = null;
+      terminalWatchdog.clear();
+    }
     const {pending, expired} = settleSnapshot(state.pending, incoming);
     if (pending !== state.pending) {
       state.pending = pending;
@@ -132,6 +171,10 @@ function receive(frame) {
     if (!state.pending && !state.recovering) finishRecovery();
     draw();
   } else if (frame?.type === "error" && typeof frame.code === "string") {
+    if (["ROOM_NOT_TERMINAL", "RELEASE_NOT_ELIGIBLE"].includes(frame.code)) {
+      terminalWatchdog.clear();
+      state.terminalPending = null;
+    }
     // A protocol error does not identify a pending command. Keep its original payload.
     state.notice = errors[frame.code] ?? "The server rejected the message.";
     if (state.pending) link.halt("protocol");
@@ -142,18 +185,37 @@ function receive(frame) {
 }
 
 function connect() {
-  link = new GameplayConnection({
+  const connection = new GameplayConnection({
     pageURL: window.location.href,
     token: state.session.session_token,
     onStatus(status) {
+      if (link !== connection) return;
+      if (status === "retired") {
+        returnToLobby("The completed room was released. You can create or join a new room.");
+        return;
+      }
       state.status = status;
       if (status !== "connected") watchdog.clear();
+      if (["replaced", "unauthorized"].includes(status)) {
+        terminalWatchdog.clear();
+        state.terminalPending = null;
+      }
       draw();
     },
-    onFrame: receive,
+    onFrame(frame) { if (link === connection) receive(frame); },
   });
+  link = connection;
   if (navigator.onLine === false) link.setAvailable("network", false);
   else link.connect();
+}
+
+function requestTerminal(type) {
+  if (!terminalCommands(state.snapshot, state.status === "connected", state.terminalPending).includes(type)) return;
+  state.notice = "";
+  state.terminalPending = type;
+  if (link.send({type})) terminalWatchdog.arm();
+  else state.terminalPending = null;
+  draw();
 }
 
 function requestMove(move) {
@@ -165,7 +227,7 @@ function requestMove(move) {
   draw();
 }
 
-function submitAdmission(event, kind) {
+async function submitAdmission(event, kind) {
   event.preventDefault();
   if (admission || admissionPending || state.session) return;
   const field = kind === "create" ? "bet-unit" : "room-input";
@@ -180,10 +242,18 @@ function submitAdmission(event, kind) {
     byId(field).focus();
     return;
   }
+  admissionPending = true;
+  state.notice = "";
+  draw();
   try {
-    admission = newAdmission(kind, input);
+    const context = await admissionContext();
+    admission = newAdmission(kind, input, globalThis.crypto, context);
   } catch {
-    state.notice = "Secure randomness is unavailable in this browser.";
+    state.notice = "Could not prepare a room request. Check your connection and try again.";
+  } finally {
+    admissionPending = false;
+  }
+  if (!admission) {
     draw();
     return;
   }
@@ -218,13 +288,19 @@ async function confirmAdmission() {
   } finally {
     admissionPending = false;
     draw();
-    if (!state.session) byId(admission ? "retry-admission" : kind === "create" ? "bet-unit" : "room-input").focus();
+    if (!state.session) {
+      const unit = byId("bet-unit");
+      (admission ? byId("retry-admission") : kind === "join" ? byId("room-input") :
+        unit.disabled ? byId("create-form").querySelector("button") : unit).focus();
+    }
   }
 }
 
 byId("retry-admission").addEventListener("click", confirmAdmission);
 byId("create-form").addEventListener("submit", event => submitAdmission(event, "create"));
 byId("join-form").addEventListener("submit", event => submitAdmission(event, "join"));
+byId("acknowledge-result").addEventListener("click", () => requestTerminal("acknowledge_result"));
+byId("release-room").addEventListener("click", () => requestTerminal("release_room"));
 for (const id of ["bet-unit", "room-input"]) {
   byId(id).addEventListener("input", () => {
     if (invalidAdmissionField !== id) return;
@@ -268,10 +344,13 @@ byId("actions").addEventListener("click", event => {
   requestMove(move);
 });
 byId("copy-code").addEventListener("click", async () => {
+  const session = state.session;
   try {
-    await navigator.clipboard.writeText(state.session.room_code);
+    await navigator.clipboard.writeText(session.room_code);
+    if (state.session !== session) return;
     state.notice = "Room code copied.";
   } catch {
+    if (state.session !== session) return;
     const range = document.createRange();
     range.selectNodeContents(byId("room-code"));
     const selection = window.getSelection();
@@ -298,16 +377,31 @@ byId("leave").addEventListener("click", () => {
   dialog.showModal();
 });
 dialog.addEventListener("close", () => {
-  if (dialog.returnValue !== "leave") return;
+  if (dialog.returnValue === "leave" && state.session) returnToLobby();
+});
+function returnToLobby(notice = "") {
   lastTouch = null;
+  lastReleasePoll = -Infinity;
   finishRecovery();
-  Object.assign(state, {session: null, pending: null, snapshot: null, recovering: false, notice: ""});
+  terminalWatchdog.clear();
+  admission = null;
+  invalidAdmissionField = null;
+  Object.assign(state, {session: null, pending: null, snapshot: null, sampledAt: 0, status: "idle",
+    recovering: false, terminalPending: null, notice});
   save();
-  link.halt();
+  const previous = link;
   link = null;
+  previous?.halt();
+  if (dialog.open) dialog.close();
+  byId("room-input").value = "";
+  const unit = byId("bet-unit");
+  if (unit.value !== "10") {
+    unit.value = "10";
+    unit.dispatchEvent(new Event("change"));
+  }
   draw();
   byId("title").focus();
-});
+}
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && state.status === "connected") link.send({type: "snapshot_request"});
 });

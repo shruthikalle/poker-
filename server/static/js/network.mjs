@@ -1,7 +1,7 @@
 import {decode, validUnit} from "./state.mjs";
 
 export const reconnectDelay = attempt => Math.min(250 * 2 ** attempt, 2000);
-const manualOnly = new Set(["replaced", "unauthorized", "protocol"]);
+const manualOnly = new Set(["replaced", "retired", "unauthorized", "protocol"]);
 
 export function commandWatchdog(onTimeout, {
   now = () => performance.now(),
@@ -53,6 +53,17 @@ export class AdmissionRejected extends Error {
   }
 }
 
+export async function admissionContext() {
+  const response = await fetch("./api/admission-context", {
+    signal: AbortSignal.timeout(5000), mode: "same-origin", redirect: "error", cache: "no-store",
+  });
+  const {context} = await response.json();
+  if (!response.ok || typeof context !== "string" || !/^[0-9a-f]{32}$/.test(context)) {
+    throw new Error("Could not obtain admission context");
+  }
+  return context;
+}
+
 export async function admit({kind, input, key}) {
   let response, data;
   const uncertain = "The server did not confirm admission. Retry the same request. A server restart can erase its recovery record.";
@@ -76,6 +87,7 @@ export async function admit({kind, input, key}) {
       "409:an active room already exists": "An active room already exists. Join with its room code.",
       "409:room is full": "This room already has two players.",
       "409:admission key conflict": "The recovery request conflicts with an existing admission.",
+      "409:ADMISSION_EXPIRED": "That admission request expired. Use the form to start a new request.",
       "422:invalid admission key": "The admission recovery key is invalid.",
       "422:invalid request body": kind === "create"
         ? "Choose an even bet unit from 2 to 20." : "Enter a valid room code.",
@@ -153,6 +165,8 @@ export class GameplayConnection {
     this.socket = null;
     if (code === 4000) {
       this.status("replaced");
+    } else if (code === 4001) {
+      this.status("retired");
     } else if (this.terminal || this.attempt >= 11) {
       this.status("offline");
     } else {

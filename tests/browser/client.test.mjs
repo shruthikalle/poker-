@@ -4,7 +4,7 @@ import {commandWatchdog, GameplayConnection, reconnectDelay, socketURL} from "..
 import {newAdmission, persist, restore, restoreAdmission} from "../../server/static/js/session.mjs";
 import {
   acceptsSnapshot, acknowledge, actionLabel, decode, offeredMoves, readAck,
-  readPending, readSnapshot, remainingMs, settleSnapshot, wireCommand,
+  readPending, readSnapshot, remainingMs, settleSnapshot, terminalCommands, wireCommand,
 } from "../../server/static/js/state.mjs";
 
 function snapshot(changes = {}) {
@@ -47,6 +47,22 @@ test("decoder rejects malformed and unsafe frame shapes", () => {
     snapshot({result: {kind: "fold_win", winner: "B", showdown_hole_cards: {A: ["9h", "5h"], B: ["Ts", "3c"]}}})]) {
     assert.equal(readSnapshot(frame, "A"), null);
   }
+});
+
+test("terminal controls require the current socket and the server eligibility sample", () => {
+  const terminal = snapshot({lifecycle: "complete", lifecycle_revision: 3,
+    match_result: {reason: "forfeit", winner: "A"},
+    room_release: {acknowledged: {A: false, B: true}, eligible: false, remaining_ms: 1}});
+  assert.deepEqual(readSnapshot(terminal, "A"), terminal);
+  assert.deepEqual(terminalCommands(terminal, true, null), ["acknowledge_result"]);
+  assert.deepEqual(terminalCommands(terminal, false, null), []);
+  assert.deepEqual(terminalCommands(terminal, true, "acknowledge_result"), []);
+  const inconsistent = {...terminal, room_release: {...terminal.room_release, eligible: true}};
+  assert.equal(readSnapshot(inconsistent, "A"), null);
+  const eligible = {...inconsistent, room_release: {...inconsistent.room_release, remaining_ms: 0}};
+  assert.deepEqual(readSnapshot(eligible, "A"), eligible);
+  assert.deepEqual(terminalCommands(eligible, true, null), ["acknowledge_result", "release_room"]);
+  assert.equal(readSnapshot(snapshot({room_release: eligible.room_release}), "A"), null);
 });
 
 test("command uses random identity and authoritative hand and engine revision", () => {
@@ -203,6 +219,23 @@ test("socket authority, stale generation, bounded reconnect and replacement", ()
   assert.equal(timers.size, 0);
   conn.halt();
   assert.equal(conn.socket, null);
+});
+
+test("a retired connection cannot revive its own socket or deliver late snapshots", () => {
+  const frames = [];
+  const connection = new GameplayConnection({pageURL: "http://localhost/", token: "fixture-token",
+    Socket: FakeSocket, onStatus() {}, onFrame: frame => frames.push(frame)});
+  connection.connect();
+  const socket = connection.socket;
+  socket.open();
+  connection.synchronized(true);
+  socket.emit("close", {code: 4001});
+  socket.emit("message", {data: '{"type":"snapshot"}'});
+  connection.setAvailable("network", false);
+  connection.setAvailable("network", true);
+  assert.equal(connection.state, "retired");
+  assert.equal(connection.socket, null);
+  assert.deepEqual(frames, []);
 });
 
 test("command recovery has one fixed monotonic deadline per transmission", () => {

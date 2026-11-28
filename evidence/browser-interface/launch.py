@@ -42,6 +42,11 @@ def expiry():
     return fixture("showdown", grace=650_000_000)
 
 
+def room_lifecycle():
+    """Use the normal PDF app with a shorter disconnect grace for live checks."""
+    return create_app(grace_duration=SECOND)
+
+
 class ShortStackRoom(RoomManager):
     """Supply a reachable terminal accounting boundary without playing earlier hands."""
 

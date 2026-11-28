@@ -1,4 +1,4 @@
-import {actionLabel, offeredMoves, remainingMs} from "./state.mjs";
+import {actionLabel, offeredMoves, remainingMs, terminalCommands} from "./state.mjs";
 
 const ranks = {A: "Ace", K: "King", Q: "Queen", J: "Jack", T: "Ten"};
 const suits = {c: ["♣", "clubs"], d: ["♦", "diamonds"], h: ["♥", "hearts"], s: ["♠", "spades"]};
@@ -102,8 +102,13 @@ export function renderTable(state) {
     : connectionNotices[status];
   text("notice", (session && connectionNotice) || state.notice);
   if (!session) {
-    text("announcements", "");
-    text("automatic", "");
+    for (const id of ["announcements", "automatic", "room-code", "game-title", "game-meta",
+      "result-title", "result-detail", "release-status", "release-countdown", "action-status",
+      "connection-label", "lifecycle", "turn-status", "turn-clock", "presence", "grace-a", "grace-b",
+      "your-stack", "opponent-stack", "your-markers", "opponent-markers", "pot"]) text(id, "");
+    byId("result").hidden = true;
+    byId("room-release").hidden = true;
+    byId("turn-progress").value = 0;
     for (const id of ["board", "your-cards", "opponent-cards"]) byId(id).replaceChildren();
     return;
   }
@@ -176,6 +181,19 @@ export function renderTable(state) {
       : "";
     text("result-detail", result[1] + lastHand);
   }
+  const release = view.room_release;
+  byId("room-release").hidden = !release;
+  if (release) {
+    const allowed = terminalCommands(view, status === "connected", state.terminalPending);
+    byId("acknowledge-result").disabled = !allowed.includes("acknowledge_result");
+    byId("release-room").disabled = !allowed.includes("release_room");
+    const mine = release.acknowledged[view.seat] ? "You acknowledged." : "Acknowledge to confirm you saw the result.";
+    const theirs = release.acknowledged[opponent] ? "Opponent acknowledged." : "Opponent acknowledgment pending.";
+    const availability = state.terminalPending === "release_room" ? "Confirming room release…" :
+      status !== "connected" ? "Reconnect to use the room controls." :
+        release.eligible ? "The room can be released." : "Room release is unavailable.";
+    text("release-status", `${mine} ${theirs} ${availability}`);
+  }
   const presence = view.presence[opponent] ? "Opponent connected." : "Opponent disconnected.";
   text("announcements", terminal ? result[0] : status !== "connected" ? "" :
     `${presence} ${result?.[0] ?? turn}`);
@@ -193,6 +211,13 @@ export function renderTable(state) {
 }
 
 export function renderTimers({snapshot: view, sampledAt, status}, now) {
+  const release = view?.room_release;
+  const retention = status === "connected" && release && !release.eligible && release.remaining_ms > 0;
+  byId("release-countdown").hidden = !retention;
+  if (retention) {
+    const seconds = Math.ceil(remainingMs(release.remaining_ms, sampledAt, now) / 1000);
+    text("release-countdown", seconds ? `One-seat retention: ${seconds}s` : "Checking release availability…");
+  }
   const clock = view?.turn_clock;
   const show = status === "connected" && clock && !view.match_result && clock.status !== "inactive";
   byId("turn-clock").hidden = !show;
